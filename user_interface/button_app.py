@@ -17,32 +17,42 @@ HTML_TEMPLATE = """
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
         h1 { color: #333; }
-        input[type="range"], input[type="number"] { width: 100%; padding: 10px; margin-bottom: 10px; }
-        button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
-        button:hover { background-color: #45a049; }
-        pre { background-color: #eee; padding: 10px; border: 1px solid #ccc; overflow: auto; }
+        input[type="number"] { width: 100%; padding: 10px; margin-bottom: 10px; }
+        button { 
+            padding: 15px 30px;
+            background-color: #4CAF50; 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            font-size: 18px;
+            transition: 0.3s;
+        }
+        button:active {
+            background-color: #45a049;
+            transform: scale(0.98);
+        }
     </style>
     <script>
         let running = false;
 
-        function startMotor(value) {
-            let stepDelay = document.getElementById('step_delay').value;
-
-            if (value > 0 && !running) {
+        function startMotor() {
+            if (!running) {
+                let stepDelay = document.getElementById('step_delay').value;
                 running = true;
+
                 fetch('/start_motor', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({'step_delay': stepDelay})
                 });
-            } else if (value === "0" && running) {
-                running = false;
-                stopMotor();
             }
         }
 
         function stopMotor() {
-            fetch('/stop_motor', {method: 'POST'});
+            if (running) {
+                running = false;
+                fetch('/stop_motor', {method: 'POST'});
+            }
         }
     </script>
 </head>
@@ -52,10 +62,9 @@ HTML_TEMPLATE = """
     <label>Step Delay (Microseconds):</label>
     <input type="number" id="step_delay" min="1" value="1000">
 
-    <br>
-    
-    <label>Move Slider to Start/Stop Motor:</label>
-    <input type="range" min="0" max="1" value="0" step="1" oninput="startMotor(this.value)">
+    <br><br>
+
+    <button onmousedown="startMotor()" onmouseup="stopMotor()">Press and Hold to Move</button>
 
 </body>
 </html>

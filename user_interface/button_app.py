@@ -86,7 +86,7 @@ def start_motor():
             return jsonify({'status': 'Error: Step delay must be >= 1 microsecond'})
 
         # Start motor process
-        process = subprocess.Popen(['./motor_control', step_delay])
+        process = subprocess.Popen(['./motor_button', step_delay])
         return jsonify({'status': f'Motor started with step delay {step_delay} microseconds.'})
     
     return jsonify({'status': 'Motor already running'})

@@ -12,7 +12,7 @@
 volatile int running = 0;    // Motor running state
 volatile int STEP_DELAY = 1000; // Default step delay in microseconds
 
-// Handle termination signals (CTRL+C)
+// Handle termination signals (CTRL+C or SIGTERM)
 void handleSignal(int signal) {
     running = 0;
 }
@@ -64,3 +64,4 @@ int main(int argc, char *argv[]) {
     printf("Motor stopped.\n");
     return 0;
 }
+

@@ -1,7 +1,13 @@
-from flask import Flask, render_template_string, request
+from flask import Flask, render_template_string, request, jsonify
 import subprocess
+import os
+import signal
+import time
 
 app = Flask(__name__)
+
+# Store process info
+process = None
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -12,17 +18,21 @@ HTML_TEMPLATE = """
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
         h1 { color: #333; }
+        input[type="number"] { width: 100%; padding: 10px; margin-bottom: 10px; }
         button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
         button:hover { background-color: #45a049; }
         pre { background-color: #eee; padding: 10px; border: 1px solid #ccc; overflow: auto; }
-        input { padding: 10px; width: 80%; margin-bottom: 10px; }
     </style>
 </head>
 <body>
     <h1>Stepper Motor Control</h1>
     <form method="POST">
-        <label>Enter Angle (degrees):</label><br>
-        <input type="number" step="0.1" name="angle" required>
+        <label>Angle (Degrees):</label>
+        <input type="number" step="0.1" name="angle" required><br>
+
+        <label>Step Delay (Microseconds):</label>
+        <input type="number" min="1" name="step_delay" required><br>
+
         <button type="submit">Rotate</button>
     </form>
     {% if output %}
@@ -39,10 +49,14 @@ def index():
     if request.method == 'POST':
         try:
             angle = request.form['angle']
-            
-            # Run the compiled C program with angle as argument
+            step_delay = request.form['step_delay']
+
+            if int(step_delay) < 1:
+                return jsonify({'status': 'Error: Step delay must be >= 1 microsecond'})
+
+            # Run C program with angle and step delay
             result = subprocess.run(
-                ['./motor_control', angle], 
+                ['./motor_control', angle, step_delay], 
                 text=True, capture_output=True, check=True
             )
             output = result.stdout

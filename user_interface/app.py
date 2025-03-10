@@ -1,6 +1,10 @@
 from flask import Flask, render_template_string, request
 import subprocess
 
+# Website: http://10.8.24.211:5000 (if connected to GWDevice)
+# This IP could change based on the network
+# RPi terminal will output the URLs when this runs. Try the 3rd one each time
+
 app = Flask(__name__)
 
 HTML_TEMPLATE = """

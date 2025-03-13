@@ -23,14 +23,13 @@ int main() {
     // Resize the shared memory segment
     ftruncate(shm_fd, SHM_SIZE);
 
-    // Map the shared memory
+    // Shared Memory Mapping
     shared_data = (shared_data_t *)mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (shared_data == MAP_FAILED) {
         perror("Shared memory mapping failed");
         return 1;
     }
-
-    // Open serial port
+    // Serial Port Check
     FILE *serial = fopen(SERIAL_PORT, "r");
     if (serial == NULL) {
         perror("Failed to open serial port");

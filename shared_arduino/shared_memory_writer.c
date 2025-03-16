@@ -23,13 +23,14 @@ int main() {
     // Resize the shared memory segment
     ftruncate(shm_fd, SHM_SIZE);
 
-    // Shared Memory Mapping
+    // Map the shared memory
     shared_data = (shared_data_t *)mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (shared_data == MAP_FAILED) {
         perror("Shared memory mapping failed");
         return 1;
     }
-    // Serial Port Check
+
+    // Open serial port
     FILE *serial = fopen(SERIAL_PORT, "r");
     if (serial == NULL) {
         perror("Failed to open serial port");
@@ -39,26 +40,33 @@ int main() {
     printf("Reading data from Arduino...\n");
 
     char buffer[64];
-    while (fgets(buffer, sizeof(buffer), serial) != NULL) {
-        int t_on, t_off, position;
+    while (1) {
+        int n = read(fileno(serial), buffer, sizeof(buffer) - 1);
+        if (n > 0) {
+            buffer[n] = '\0'; // Null-terminate the string
 
-        // Parse incoming data
-        if (sscanf(buffer, "%d,%d,%d", &t_on, &t_off, &position) == 3) {
-            shared_data->t_on = t_on;
-            shared_data->t_off = t_off;
-            shared_data->position = position;
+            int t_on, t_off, position;
 
-            // Compute velocity (basic example)
-            static uint16_t last_position = 0;
-            float velocity = (position - last_position) * 0.01; // Example scale factor
-            shared_data->velocity = velocity;
+            // Parse incoming data
+            if (sscanf(buffer, "%d,%d,%d", &t_on, &t_off, &position) == 3) {
+                shared_data->t_on = t_on;
+                shared_data->t_off = t_off;
+                shared_data->position = position;
 
-            shared_data->newData = true;
+                // Compute velocity (basic example)
+                static uint16_t last_position = 0;
+                float velocity = (position - last_position) * 0.01;
+                shared_data->velocity = velocity;
 
-            last_position = position;
+                shared_data->newData = true;
 
-            printf("High Time: %d, Low Time: %d, Position: %d, Velocity: %.2f\n",
-                   shared_data->t_on, shared_data->t_off, shared_data->position, shared_data->velocity);
+                last_position = position;
+
+                printf("High Time: %d, Low Time: %d, Position: %d, Velocity: %.2f\n",
+                       shared_data->t_on, shared_data->t_off, shared_data->position, shared_data->velocity);
+            }
+        } else {
+            usleep(1000); // Sleep briefly to prevent CPU overuse
         }
     }
 

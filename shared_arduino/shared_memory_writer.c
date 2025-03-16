@@ -21,7 +21,11 @@ int main() {
         return 1;
     }
 
-    ftruncate(shm_fd, SHM_SIZE);
+    // Set the size of the shared memory
+    if (ftruncate(shm_fd, SHM_SIZE) == -1) {
+        perror("Failed to set shared memory size");
+        return 1;
+    }
 
     shared_data = (shared_data_t *)mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (shared_data == MAP_FAILED) {
@@ -37,9 +41,8 @@ int main() {
 
     printf("Reading data from Arduino...\n");
 
-    char buffer[128]; // Increased buffer size
+    char buffer[128];
     while (1) {
-        // Use select() to avoid blocking
         fd_set set;
         struct timeval timeout;
 

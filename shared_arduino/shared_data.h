@@ -7,7 +7,7 @@
 #define SHM_KEY 1234
 #define SHM_SIZE (sizeof(shared_data_t))
 
-// Structure for shared data (aligned to avoid memory corruption)
+// (aligned to avoid memory corruption)
 typedef struct __attribute__((aligned(4))) {
     uint16_t t_on;
     uint16_t t_off;

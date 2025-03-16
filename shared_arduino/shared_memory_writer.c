@@ -57,26 +57,24 @@ int main() {
 
                 int t_on, t_off, position;
                 if (sscanf(buffer, "%d,%d,%d", &t_on, &t_off, &position) == 3) {
-                    // Write only when newData == false
-                    if (!shared_data->newData) {
-                        shared_data->t_on = t_on;
-                        shared_data->t_off = t_off;
-                        shared_data->position = position;
+                    // Always write (don't wait for reader)
+                    shared_data->t_on = t_on;
+                    shared_data->t_off = t_off;
+                    shared_data->position = position;
 
-                        static uint16_t last_position = 0;
-                        shared_data->velocity = (position - last_position) * 0.01;
-                        shared_data->newData = true;
+                    static uint16_t last_position = 0;
+                    shared_data->velocity = (position - last_position) * 0.01;
+                    shared_data->newData = true;
 
-                        last_position = position;
+                    last_position = position;
 
-                        printf("High Time: %d, Low Time: %d, Position: %d, Velocity: %.2f\n",
-                               shared_data->t_on, shared_data->t_off, shared_data->position, shared_data->velocity);
-                    }
+                    printf("High Time: %d, Low Time: %d, Position: %d, Velocity: %.2f\n",
+                           shared_data->t_on, shared_data->t_off, shared_data->position, shared_data->velocity);
                 }
             }
         }
 
-        usleep(10000);
+        usleep(10000); // Poll every 10 ms
     }
 
     fclose(serial);

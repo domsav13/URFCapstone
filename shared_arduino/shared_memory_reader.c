@@ -24,13 +24,14 @@ void cleanup(int sig) {
 int main() {
     signal(SIGINT, cleanup);
 
-    shm_fd = shm_open("/shm_motor", O_RDONLY, 0666);
+    // ✅ Open shared memory in READ/WRITE mode (not just read-only)
+    shm_fd = shm_open("/shm_motor", O_RDWR, 0666);
     if (shm_fd == -1) {
         perror("Failed to open shared memory");
         return 1;
     }
 
-    shared_data = (shared_data_t *)mmap(0, SHM_SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+    shared_data = (shared_data_t *)mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (shared_data == MAP_FAILED) {
         perror("Failed to map shared memory");
         return 1;
@@ -40,20 +41,17 @@ int main() {
 
     while (1) {
         if (shared_data->newData) {
-            // Ensure atomic read
-            uint16_t t_on = shared_data->t_on;
-            uint16_t t_off = shared_data->t_off;
-            uint16_t position = shared_data->position;
-            float velocity = shared_data->velocity;
+            // ✅ Create local copy to avoid corruption
+            shared_data_t data = *shared_data;
 
             printf("High Time: %d, Low Time: %d, Position: %d, Velocity: %.2f\n",
-                   t_on, t_off, position, velocity);
+                   data.t_on, data.t_off, data.position, data.velocity);
 
-            // Reset after read to prevent race condition
+            // ✅ Reset only after successful read
             shared_data->newData = false;
         }
 
-        usleep(10000);
+        usleep(10000); // Poll every 10 ms
     }
 
     return 0;

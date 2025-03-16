@@ -5,7 +5,6 @@
 #include <stdbool.h>
 
 #define SHM_KEY 1234 // Shared memory key
-#define SHM_SIZE sizeof(shared_data_t)
 
 // Structure for shared data
 typedef struct {
@@ -15,5 +14,8 @@ typedef struct {
     float velocity;
     bool newData;
 } shared_data_t;
+
+// Define SHM_SIZE as a constant at runtime
+const size_t SHM_SIZE = sizeof(shared_data_t);
 
 #endif

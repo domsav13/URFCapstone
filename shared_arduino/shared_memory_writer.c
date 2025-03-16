@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <sys/select.h>
 #include "shared_data.h"
 
 #define SERIAL_PORT "/dev/ttyACM0"
@@ -20,17 +21,14 @@ int main() {
         return 1;
     }
 
-    // Resize the shared memory segment
     ftruncate(shm_fd, SHM_SIZE);
 
-    // Map the shared memory
     shared_data = (shared_data_t *)mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (shared_data == MAP_FAILED) {
         perror("Shared memory mapping failed");
         return 1;
     }
 
-    // Open serial port
     FILE *serial = fopen(SERIAL_PORT, "r");
     if (serial == NULL) {
         perror("Failed to open serial port");
@@ -41,33 +39,41 @@ int main() {
 
     char buffer[64];
     while (1) {
-        int n = read(fileno(serial), buffer, sizeof(buffer) - 1);
-        if (n > 0) {
-            buffer[n] = '\0'; // Null-terminate the string
+        // Use select() to avoid blocking
+        fd_set set;
+        struct timeval timeout;
 
-            int t_on, t_off, position;
+        FD_ZERO(&set);
+        FD_SET(fileno(serial), &set);
 
-            // Parse incoming data
-            if (sscanf(buffer, "%d,%d,%d", &t_on, &t_off, &position) == 3) {
-                shared_data->t_on = t_on;
-                shared_data->t_off = t_off;
-                shared_data->position = position;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 5000; // 5 ms
 
-                // Compute velocity (basic example)
-                static uint16_t last_position = 0;
-                float velocity = (position - last_position) * 0.01;
-                shared_data->velocity = velocity;
+        if (select(fileno(serial) + 1, &set, NULL, NULL, &timeout) > 0) {
+            int n = read(fileno(serial), buffer, sizeof(buffer) - 1);
+            if (n > 0) {
+                buffer[n] = '\0';
 
-                shared_data->newData = true;
+                int t_on, t_off, position;
+                if (sscanf(buffer, "%d,%d,%d", &t_on, &t_off, &position) == 3) {
+                    shared_data->t_on = t_on;
+                    shared_data->t_off = t_off;
+                    shared_data->position = position;
 
-                last_position = position;
+                    static uint16_t last_position = 0;
+                    float velocity = (position - last_position) * 0.01;
+                    shared_data->velocity = velocity;
+                    shared_data->newData = true;
 
-                printf("High Time: %d, Low Time: %d, Position: %d, Velocity: %.2f\n",
-                       shared_data->t_on, shared_data->t_off, shared_data->position, shared_data->velocity);
+                    last_position = position;
+
+                    printf("High Time: %d, Low Time: %d, Position: %d, Velocity: %.2f\n",
+                           shared_data->t_on, shared_data->t_off, shared_data->position, shared_data->velocity);
+                }
             }
-        } else {
-            usleep(1000); // Sleep briefly to prevent CPU overuse
         }
+
+        usleep(5000); // Poll every 5 ms
     }
 
     fclose(serial);

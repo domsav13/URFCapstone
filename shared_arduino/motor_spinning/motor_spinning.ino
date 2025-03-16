@@ -36,11 +36,17 @@ void setup()
   sei();
 }
 
-void loop() 
-{
-  encoderposition();  // Continuously update encoder position
+unsigned long lastUpdate = 0;
+const int updateInterval = 100; // 100 ms for 10 Hz
 
-  delay(100);
+void loop()
+{
+    if (millis() - lastUpdate >= updateInterval) {
+        lastUpdate = millis();
+
+        encoderposition(); // Send data at 10 Hz
+        Serial.flush();
+    }
 }
 
 //Timer Interrupt to set the stepper motor signal at a specified interval 

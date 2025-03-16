@@ -74,26 +74,23 @@ void encoderposition()
 {
   if (newData) 
   {
-    cli();  // Disable interrupts (equivalent to noInterrupts())
-    uint16_t highTime = t_on;  // Copy safely
+    cli();  
+    uint16_t highTime = t_on;
     uint16_t lowTime = t_off;
     newData = false;
-    sei();  // Re-enable interrupts (equivalent to interrupts())
+    sei();
 
-    // Convert counts to microseconds (each count = 0.5 µs)
     float t_on_us = highTime * 0.5;
     float t_off_us = lowTime * 0.5;
 
-    // Compute absolute position
     float x = ((t_on_us * 1026) / (t_on_us + t_off_us)) - 1;
     uint16_t position = (x <= 1022) ? x : 1023;
 
-    //Print results
-    Serial.print("Pulse Width High: ");
-    Serial.print(t_on_us);
-    Serial.print(" µs, Low: ");
-    Serial.print(t_off_us);
-    Serial.print(" µs, Position: ");
+    // Send clean CSV output
+    Serial.print((int)t_on_us);
+    Serial.print(",");
+    Serial.print((int)t_off_us);
+    Serial.print(",");
     Serial.println(position);
   }
 }

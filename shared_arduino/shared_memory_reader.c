@@ -24,7 +24,6 @@ void cleanup(int sig) {
 int main() {
     signal(SIGINT, cleanup);
 
-    // ✅ Open shared memory in READ/WRITE mode (not just read-only)
     shm_fd = shm_open("/shm_motor", O_RDWR, 0666);
     if (shm_fd == -1) {
         perror("Failed to open shared memory");
@@ -41,13 +40,11 @@ int main() {
 
     while (1) {
         if (shared_data->newData) {
-            // ✅ Create local copy to avoid corruption
             shared_data_t data = *shared_data;
 
             printf("High Time: %d, Low Time: %d, Position: %d, Velocity: %.2f\n",
                    data.t_on, data.t_off, data.position, data.velocity);
 
-            // ✅ Reset only after successful read
             shared_data->newData = false;
         }
 

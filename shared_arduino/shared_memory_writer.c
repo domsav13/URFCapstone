@@ -14,14 +14,12 @@ int main() {
     int shm_fd;
     shared_data_t *shared_data;
 
-    // Create shared memory segment
     shm_fd = shm_open("/shm_motor", O_CREAT | O_RDWR, 0666);
     if (shm_fd == -1) {
         perror("Shared memory creation failed");
         return 1;
     }
 
-    // Set the size of the shared memory
     if (ftruncate(shm_fd, SHM_SIZE) == -1) {
         perror("Failed to set shared memory size");
         return 1;
@@ -29,7 +27,7 @@ int main() {
 
     shared_data = (shared_data_t *)mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (shared_data == MAP_FAILED) {
-        perror("Shared memory mapping failed");
+        perror("Failed to map shared memory");
         return 1;
     }
 
@@ -59,24 +57,26 @@ int main() {
 
                 int t_on, t_off, position;
                 if (sscanf(buffer, "%d,%d,%d", &t_on, &t_off, &position) == 3) {
-                    shared_data->t_on = t_on;
-                    shared_data->t_off = t_off;
-                    shared_data->position = position;
+                    // Write only when newData == false
+                    if (!shared_data->newData) {
+                        shared_data->t_on = t_on;
+                        shared_data->t_off = t_off;
+                        shared_data->position = position;
 
-                    static uint16_t last_position = 0;
-                    float velocity = (position - last_position) * 0.01;
-                    shared_data->velocity = velocity;
-                    shared_data->newData = true;
+                        static uint16_t last_position = 0;
+                        shared_data->velocity = (position - last_position) * 0.01;
+                        shared_data->newData = true;
 
-                    last_position = position;
+                        last_position = position;
 
-                    printf("High Time: %d, Low Time: %d, Position: %d, Velocity: %.2f\n",
-                           shared_data->t_on, shared_data->t_off, shared_data->position, shared_data->velocity);
+                        printf("High Time: %d, Low Time: %d, Position: %d, Velocity: %.2f\n",
+                               shared_data->t_on, shared_data->t_off, shared_data->position, shared_data->velocity);
+                    }
                 }
             }
         }
 
-        usleep(10000); // Poll every 10 ms
+        usleep(10000);
     }
 
     fclose(serial);

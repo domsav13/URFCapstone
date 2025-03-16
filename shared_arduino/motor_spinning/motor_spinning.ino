@@ -36,17 +36,9 @@ void setup()
   sei();
 }
 
-unsigned long lastUpdate = 0;
-const int updateInterval = 100; // 100 ms for 10 Hz
-
-void loop()
+void loop() 
 {
-    if (millis() - lastUpdate >= updateInterval) {
-        lastUpdate = millis();
-
-        encoderposition(); // Send data at 10 Hz
-        Serial.flush();
-    }
+  encoderposition();  // Continuously update encoder position
 }
 
 //Timer Interrupt to set the stepper motor signal at a specified interval 
@@ -82,12 +74,13 @@ void encoderposition()
 {
   if (newData) 
   {
-    cli();
-    uint16_t highTime = t_on;
+    cli();  // Disable interrupts (equivalent to noInterrupts())
+    uint16_t highTime = t_on;  // Copy safely
     uint16_t lowTime = t_off;
     newData = false;
-    sei();
+    sei();  // Re-enable interrupts (equivalent to interrupts())
 
+    // Convert counts to microseconds (each count = 0.5 µs)
     float t_on_us = highTime * 0.5;
     float t_off_us = lowTime * 0.5;
 
@@ -95,13 +88,12 @@ void encoderposition()
     float x = ((t_on_us * 1026) / (t_on_us + t_off_us)) - 1;
     uint16_t position = (x <= 1022) ? x : 1023;
 
-    // Send data to Raspberry Pi over serial
-    Serial.print(highTime);
-    Serial.print(",");
-    Serial.print(lowTime);
-    Serial.print(",");
-    Serial.print(position);
-    Serial.println();
-    Serial.flush();
+    //Print results
+    Serial.print("Pulse Width High: ");
+    Serial.print(t_on_us);
+    Serial.print(" µs, Low: ");
+    Serial.print(t_off_us);
+    Serial.print(" µs, Position: ");
+    Serial.println(position);
   }
 }

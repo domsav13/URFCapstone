@@ -37,7 +37,7 @@ int main() {
 
     printf("Reading data from Arduino...\n");
 
-    char buffer[64];
+    char buffer[128]; // Increased buffer size
     while (1) {
         // Use select() to avoid blocking
         fd_set set;
@@ -47,7 +47,7 @@ int main() {
         FD_SET(fileno(serial), &set);
 
         timeout.tv_sec = 0;
-        timeout.tv_usec = 5000; // 5 ms
+        timeout.tv_usec = 10000; // 10 ms
 
         if (select(fileno(serial) + 1, &set, NULL, NULL, &timeout) > 0) {
             int n = read(fileno(serial), buffer, sizeof(buffer) - 1);
@@ -73,7 +73,7 @@ int main() {
             }
         }
 
-        usleep(5000); // Poll every 5 ms
+        usleep(10000); // Poll every 10 ms
     }
 
     fclose(serial);

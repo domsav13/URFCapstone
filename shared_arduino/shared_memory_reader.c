@@ -22,19 +22,12 @@ void cleanup(int sig) {
 }
 
 int main() {
-    // Handle CTRL+C to clean up shared memory
     signal(SIGINT, cleanup);
 
     // Open shared memory
     shm_fd = shm_open("/shm_motor", O_RDONLY, 0666);
     if (shm_fd == -1) {
         perror("Failed to open shared memory");
-        return 1;
-    }
-
-    // Resize shared memory to match the struct size
-    if (ftruncate(shm_fd, SHM_SIZE) == -1) {
-        perror("Failed to set shared memory size");
         return 1;
     }
 

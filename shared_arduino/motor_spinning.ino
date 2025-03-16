@@ -39,6 +39,8 @@ void setup()
 void loop() 
 {
   encoderposition();  // Continuously update encoder position
+
+  delay(100);
 }
 
 //Timer Interrupt to set the stepper motor signal at a specified interval 
@@ -94,5 +96,6 @@ void encoderposition()
     Serial.print(",");
     Serial.print(position);
     Serial.println();
+    Serial.flush();
   }
 }

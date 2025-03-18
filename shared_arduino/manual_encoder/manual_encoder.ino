@@ -3,7 +3,7 @@ volatile uint16_t t_off = 0;
 volatile bool newData = false;
 
 int targetPosition = -1; // Target angle (in encoder units)
-int motorDirection = 0;  // 1 = CW, -1 = CCW, 0 = stopped
+int motorDirection = 0;  // 1 = rotating, 0 = stopped
 bool manualMode = false;
 
 void setup() 
@@ -42,9 +42,10 @@ void loop()
 {
     encoderposition();  // Continuously update encoder position
 
-    // Read target position from serial
+    // ✅ Read target position from serial
     if (Serial.available()) {
         int newTarget = Serial.parseInt();
+        delay(10);
         if (newTarget >= 0 && newTarget <= 360) {
             targetPosition = map(newTarget, 0, 360, 0, 1023);
             manualMode = true;
@@ -53,21 +54,21 @@ void loop()
         }
     }
 
-    // Adjust motor to target position in manual mode
+    // ✅ Adjust motor to target position
     if (manualMode) {
         adjustMotorPosition();
     }
 }
 
-// Timer Interrupt to step motor signal at fixed interval
+// ✅ Timer Interrupt to step motor signal at fixed interval
 ISR(TIMER1_COMPA_vect) 
 {
-    if (motorDirection != 0) {
-        PINA = 0b00000011; // Toggle pins to create motor step signal
+    if (motorDirection == 1) {
+        PINA = 0b00000011; // ✅ Toggle pins to create motor step signal
     }
 }
 
-// Timer interrupt to capture encoder signal
+// ✅ Timer interrupt to capture encoder signal
 ISR(TIMER5_CAPT_vect) 
 {
     static uint16_t lastCapture = 0;
@@ -90,7 +91,7 @@ ISR(TIMER5_CAPT_vect)
     lastCapture = currentCapture;
 }
 
-// Continuously update encoder position
+// ✅ Continuously update encoder position
 void encoderposition()
 {
     if (newData) 
@@ -107,7 +108,7 @@ void encoderposition()
         float x = ((t_on_us * 1026) / (t_on_us + t_off_us)) - 1;
         uint16_t position = (x <= 1022) ? x : 1023;
 
-        // Send clean CSV output (t_on_us, t_off_us, position)
+        // ✅ Send clean CSV output (t_on_us, t_off_us, position)
         Serial.print((int)t_on_us);
         Serial.print(",");
         Serial.print((int)t_off_us);
@@ -116,30 +117,24 @@ void encoderposition()
     }
 }
 
-// Control motor based on current vs target position
+// ✅ Rotate motor to target position
 void adjustMotorPosition()
 {
+    // ✅ Read current position from encoder
     float t_on_us = t_on * 0.5;
     float t_off_us = t_off * 0.5;
     float x = ((t_on_us * 1026) / (t_on_us + t_off_us)) - 1;
     uint16_t currentPosition = (x <= 1022) ? x : 1023;
 
     if (currentPosition == targetPosition) {
-        // Stop motor if already at target
+        // ✅ Stop motor when target is reached
         motorDirection = 0;
         Serial.println("Target position reached.");
+        manualMode = false; // ✅ Stop manual mode once target is reached
     } 
     else {
-        int diffClockwise = (targetPosition - currentPosition + 1024) % 1024;
-        int diffCounterClockwise = (currentPosition - targetPosition + 1024) % 1024;
-
-        if (diffClockwise < diffCounterClockwise) {
-            motorDirection = 1; // Rotate CW
-            Serial.println("Rotating CW");
-        } 
-        else {
-            motorDirection = -1; // Rotate CCW
-            Serial.println("Rotating CCW");
-        }
+        // ✅ Always rotate in one direction until target reached
+        motorDirection = 1;
+        Serial.println("Rotating...");
     }
 }

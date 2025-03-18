@@ -1,11 +1,48 @@
+volatile uint16_t t_on = 0;
+volatile uint16_t t_off = 0;
+volatile bool newData = false;
+
 int targetPosition = -1; // Target angle (in encoder units)
+int motorDirection = 0;  // 1 = CW, -1 = CCW, 0 = stopped
 bool manualMode = false;
+
+void setup() 
+{
+    cli(); // Disable interrupts while setting up
+
+    Serial.begin(115200);
+
+    DDRA = 0b00000011; // Set both pins 22 and 23 as output
+    PORTA = 0b00000000; // Start with both pins low
+
+    // External interrupt setup
+    DDRD  = 0b00000000;
+    EICRA = 0b00001111; // Rising and falling edge detection
+    EIMSK = 0b00000011;
+
+    // Timer1 setup for motor stepping
+    TCCR1A = 0b00000000; // Normal mode
+    TCCR1B = 0b00001010; // CTC mode, prescaler = 8
+    TCCR1C = 0b00000000;
+
+    OCR1A = 999; // Compare match value = 100 microseconds
+    TIMSK1 = 0b00000010; // Enable Timer1 compare interrupt
+  
+    // Timer5 setup for encoder capture
+    DDRL &= ~(1 << PL1); // Pin 48 as input
+    TCCR5A = 0b00000000;
+    TCCR5B = 0b11000010; // Falling edge, prescaler = 8 (2 MHz)
+    TCCR5C = 0b00000000;
+    TIMSK5 = 0b00100001; // Enable capture and overflow interrupts
+
+    sei(); // Enable interrupts
+}
 
 void loop() 
 {
-    encoderposition();
+    encoderposition();  // Continuously update encoder position
 
-    // ✅ Read target position from serial
+    // Read target position from serial
     if (Serial.available()) {
         int newTarget = Serial.parseInt();
         if (newTarget >= 0 && newTarget <= 360) {
@@ -16,12 +53,70 @@ void loop()
         }
     }
 
-    // ✅ Adjust motor position in manual mode
+    // Adjust motor to target position in manual mode
     if (manualMode) {
         adjustMotorPosition();
     }
 }
 
+// Timer Interrupt to step motor signal at fixed interval
+ISR(TIMER1_COMPA_vect) 
+{
+    if (motorDirection != 0) {
+        PINA = 0b00000011; // Toggle pins to create motor step signal
+    }
+}
+
+// Timer interrupt to capture encoder signal
+ISR(TIMER5_CAPT_vect) 
+{
+    static uint16_t lastCapture = 0;
+    static bool measuringOnTime = true;
+    uint16_t currentCapture = ICR5;
+
+    if (measuringOnTime) 
+    {
+        t_on = currentCapture - lastCapture;
+        TCCR5B ^= (1 << ICES5); // Toggle edge detection
+    } 
+    else 
+    {
+        t_off = currentCapture - lastCapture;
+        newData = true;
+        TCCR5B ^= (1 << ICES5);
+    }
+
+    measuringOnTime = !measuringOnTime;
+    lastCapture = currentCapture;
+}
+
+// Continuously update encoder position
+void encoderposition()
+{
+    if (newData) 
+    {
+        cli();  
+        uint16_t highTime = t_on;
+        uint16_t lowTime = t_off;
+        newData = false;
+        sei();
+
+        float t_on_us = highTime * 0.5;
+        float t_off_us = lowTime * 0.5;
+
+        float x = ((t_on_us * 1026) / (t_on_us + t_off_us)) - 1;
+        uint16_t position = (x <= 1022) ? x : 1023;
+
+        // Send clean CSV output (t_on_us, t_off_us, position)
+        Serial.print((int)t_on_us);
+        Serial.print(",");
+        Serial.print((int)t_off_us);
+        Serial.print(",");
+        Serial.println(position);
+    }
+}
+
+// Control motor based on current vs target position
 void adjustMotorPosition()
 {
     float t_on_us = t_on * 0.5;
@@ -30,18 +125,20 @@ void adjustMotorPosition()
     uint16_t currentPosition = (x <= 1022) ? x : 1023;
 
     if (currentPosition == targetPosition) {
+        // Stop motor if already at target
         motorDirection = 0;
+        Serial.println("Target position reached.");
     } 
     else {
         int diffClockwise = (targetPosition - currentPosition + 1024) % 1024;
         int diffCounterClockwise = (currentPosition - targetPosition + 1024) % 1024;
 
         if (diffClockwise < diffCounterClockwise) {
-            motorDirection = 1;
+            motorDirection = 1; // Rotate CW
             Serial.println("Rotating CW");
         } 
         else {
-            motorDirection = -1;
+            motorDirection = -1; // Rotate CCW
             Serial.println("Rotating CCW");
         }
     }

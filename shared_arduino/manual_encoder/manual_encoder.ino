@@ -3,15 +3,16 @@ volatile uint16_t t_off = 0;
 volatile bool newData = false;
 float targetPosition = -1;
 bool motorEnabled = false;
-const float POSITION_TOLERANCE = 1.0;  // ±1 degree tolerance
+const float POSITION_TOLERANCE = 1.0; // ±1 degree tolerance
+unsigned long lastSendTime = 0; // For throttling output
 
 void setup() {
-    cli();  // Disable interrupts
+    cli();
 
     Serial.begin(115200);
 
-    DDRA = 0b00000011;  // Set pins 22 and 23 as outputs
-    PORTA = 0b00000000; // Start with low signals
+    DDRA = 0b00000001; // Pin 22 for step
+    PORTA = 0b00000000;
 
     EICRA = 0b00001111;
     EIMSK = 0b00000011;
@@ -19,7 +20,7 @@ void setup() {
     TCCR1A = 0b00000000;
     TCCR1B = 0b00001010;
     TCCR1C = 0b00000000;
-    OCR1A = 999; // Step signal every 100 microseconds
+    OCR1A = 999;
     TIMSK1 = 0b00000010;
 
     DDRL &= ~(1 << PL1);
@@ -29,11 +30,10 @@ void setup() {
     TCCR5C = 0b00000000;
     TIMSK5 = 0b00100001;
 
-    sei();  // Enable interrupts
+    sei();
 }
 
 ISR(TIMER1_COMPA_vect) {
-    // Only toggle step pin if motor is enabled
     if (motorEnabled) {
         PINA = 0b00000001; // Toggle step pin (digital 22)
     }
@@ -65,48 +65,39 @@ void encoderposition() {
         newData = false;
         sei();
 
-        // Convert PWM timing to raw encoder position
         float t_on_us = highTime * 0.5;
         float t_off_us = lowTime * 0.5;
 
         float x = ((t_on_us * 1026) / (t_on_us + t_off_us)) - 1;
         uint16_t position = (x <= 1022) ? x : 1023;
 
-        // ✅ Convert encoder value to degrees (0 to 360)
+        // ✅ Convert to degrees (0 to 360)
         float currentAngle = (position * 360.0) / 1024.0;
 
-        Serial.print("Raw Position: ");
-        Serial.print(position);
-        Serial.print(", Angle: ");
-        Serial.println(currentAngle);
+        // ✅ Throttle output to avoid spamming
+        if (millis() - lastSendTime > 50) { // Send every 50ms
+            lastSendTime = millis();
+            Serial.println(currentAngle);
+        }
 
-        // ✅ Stop motor when within tolerance range
+        // ✅ Stop motor within tolerance
         if (targetPosition != -1) {
-            if (currentAngle < targetPosition - POSITION_TOLERANCE) {
-                motorEnabled = true;
-                PORTA = 0b00000001; // Step in one direction
-            } 
-            else if (currentAngle > targetPosition + POSITION_TOLERANCE) {
-                motorEnabled = true;
-                PORTA = 0b00000010; // Step in opposite direction
-            } 
-            else {
+            if (abs(currentAngle - targetPosition) <= POSITION_TOLERANCE) {
                 motorEnabled = false;
-                PORTA = 0b00000000; // Stop motor within tolerance
-                Serial.println("Target reached!");
+                PORTA = 0b00000000;
+            } else {
+                motorEnabled = true;
             }
         }
     }
 }
 
 void loop() {
-    // ✅ Read target position from serial
     if (Serial.available()) {
-        targetPosition = Serial.parseFloat(); // Use float for angle precision
+        targetPosition = Serial.parseFloat();
         Serial.print("Target Angle Set: ");
         Serial.println(targetPosition);
 
-        // ✅ Enable motor if target is set
         if (targetPosition != -1) {
             motorEnabled = true;
         }

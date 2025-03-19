@@ -4,7 +4,6 @@
 #define DEG_PER_STEP (360.0 / (STEPS_PER_REV * MICROSTEPS))
 
 float targetPosition = -1;
-float currentPosition = 0;
 
 void setup() {
     Serial.begin(115200);
@@ -13,8 +12,8 @@ void setup() {
     Serial.println("Ready");
 }
 
-void moveMotor(float target) {
-    int steps = (int)((target - currentPosition) / DEG_PER_STEP);
+void moveMotor(float degrees) {
+    int steps = (int)(degrees / DEG_PER_STEP);
 
     Serial.print("Moving ");
     Serial.print(steps);
@@ -25,32 +24,22 @@ void moveMotor(float target) {
         delayMicroseconds(500);
         digitalWrite(STEP_PIN, LOW);
         delayMicroseconds(500);
-
-        // Increment or decrement current position
-        if (steps > 0) {
-            currentPosition += DEG_PER_STEP;
-        } else {
-            currentPosition -= DEG_PER_STEP;
-        }
     }
 
     Serial.println("Target reached");
-
-    // ✅ Clear target to prevent repeat moves
-    targetPosition = -1;
 }
 
 void loop() {
     if (Serial.available()) {
-        targetPosition = Serial.parseFloat();
+        float degrees = Serial.parseFloat();
 
         // ✅ MANUALLY FLUSH EXTRA CHARACTERS
         while (Serial.available()) {
             Serial.read();
         }
 
-        if (targetPosition >= 0 && targetPosition <= 360) {
-            moveMotor(targetPosition);
+        if (degrees >= 0 && degrees <= 360) {
+            moveMotor(degrees);
 
             // ✅ Short delay to avoid retriggering
             delay(100);

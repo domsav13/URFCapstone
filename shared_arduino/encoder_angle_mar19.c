@@ -10,6 +10,7 @@
 #define SERIAL_PORT "/dev/ttyACM0"
 #define BAUD_RATE B115200
 
+// Open the serial port
 int openSerialPort() {
     int serial = open(SERIAL_PORT, O_RDWR | O_NOCTTY);
     if (serial == -1) {
@@ -28,11 +29,16 @@ int openSerialPort() {
     options.c_cflag |= CS8;
     tcsetattr(serial, TCSANOW, &options);
 
-    tcflush(serial, TCIOFLUSH); // ✅ Flush serial buffer
+    // ✅ Flush any junk in the buffer
+    tcflush(serial, TCIOFLUSH);
+
+    // ✅ Short delay to let Arduino initialize
+    usleep(500000); // 500ms
 
     return serial;
 }
 
+// Send target position to Arduino
 void sendTargetPosition(int serial, float target) {
     char buffer[16];
     snprintf(buffer, sizeof(buffer), "%.2f\n", target);
@@ -40,28 +46,34 @@ void sendTargetPosition(int serial, float target) {
     printf("Sent target position: %.2f degrees\n", target);
 }
 
+// Read position directly using `read()`
 float readPosition(int serial) {
     char buffer[64];
     float position = -1;
+    int index = 0;
+    char c;
 
-    // ✅ Use select() to wait for data before reading
-    fd_set set;
-    struct timeval timeout;
-    FD_ZERO(&set);
-    FD_SET(serial, &set);
-
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 100000; // 100ms timeout
-
-    if (select(serial + 1, &set, NULL, NULL, &timeout) > 0) {
-        if (fgets(buffer, sizeof(buffer), fdopen(serial, "r")) != NULL) {
-            if (sscanf(buffer, "%f", &position) == 1) {
-                printf("Current Position: %.2f degrees\n", position);
+    // ✅ Read character-by-character until newline is received
+    while (index < sizeof(buffer) - 1) {
+        int n = read(serial, &c, 1);
+        if (n > 0) {
+            if (c == '\n') {
+                buffer[index] = '\0'; // End the string
+                break;
             } else {
-                fprintf(stderr, "Failed to parse position: '%s'\n", buffer);
+                buffer[index++] = c;
             }
         }
-    } 
+    }
+
+    if (index > 0) {
+        // ✅ Try to parse the float value
+        if (sscanf(buffer, "%f", &position) == 1) {
+            printf("Current Position: %.2f degrees\n", position);
+        } else {
+            fprintf(stderr, "Failed to parse position from: '%s'\n", buffer);
+        }
+    }
 
     return position;
 }
@@ -81,11 +93,14 @@ int main() {
         float currentPosition;
         while (1) {
             currentPosition = readPosition(serial);
-            if (fabs(currentPosition - targetPosition) <= 1.0) {
+
+            // ✅ Check if position is valid and within tolerance
+            if (currentPosition >= 0 && fabs(currentPosition - targetPosition) <= 1.0) {
                 printf("Target position reached!\n");
                 break;
             }
-            usleep(50000); // ✅ Poll every 50ms
+
+            usleep(50000); // ✅ Poll every 50ms (same as Arduino throttle time)
         }
     }
 

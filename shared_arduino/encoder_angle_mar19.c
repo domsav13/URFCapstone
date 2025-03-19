@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <math.h>
+#include <sys/select.h>
 
 #define SERIAL_PORT "/dev/ttyACM0"
 #define BAUD_RATE B115200
@@ -27,8 +28,7 @@ int openSerialPort() {
     options.c_cflag |= CS8;
     tcsetattr(serial, TCSANOW, &options);
 
-    // ✅ Flush the buffer to remove any stale data
-    tcflush(serial, TCIOFLUSH);
+    tcflush(serial, TCIOFLUSH); // ✅ Flush serial buffer
 
     return serial;
 }
@@ -44,17 +44,24 @@ float readPosition(int serial) {
     char buffer[64];
     float position = -1;
 
-    // ✅ Use fgets to read a complete line
-    if (fgets(buffer, sizeof(buffer), fdopen(serial, "r")) != NULL) {
-        // ✅ Try to parse the angle value
-        if (sscanf(buffer, "%f", &position) == 1) {
-            printf("Current Position: %.2f degrees\n", position);
-        } else {
-            printf("Failed to parse position from: '%s'\n", buffer);
+    // ✅ Use select() to wait for data before reading
+    fd_set set;
+    struct timeval timeout;
+    FD_ZERO(&set);
+    FD_SET(serial, &set);
+
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 100000; // 100ms timeout
+
+    if (select(serial + 1, &set, NULL, NULL, &timeout) > 0) {
+        if (fgets(buffer, sizeof(buffer), fdopen(serial, "r")) != NULL) {
+            if (sscanf(buffer, "%f", &position) == 1) {
+                printf("Current Position: %.2f degrees\n", position);
+            } else {
+                fprintf(stderr, "Failed to parse position: '%s'\n", buffer);
+            }
         }
-    } else {
-        printf("No data received.\n");
-    }
+    } 
 
     return position;
 }
@@ -69,7 +76,6 @@ int main() {
 
         if (targetPosition == -1) break;
 
-        // ✅ Send target position to Arduino
         sendTargetPosition(serial, targetPosition);
 
         float currentPosition;
@@ -79,7 +85,7 @@ int main() {
                 printf("Target position reached!\n");
                 break;
             }
-            usleep(10000); // ✅ Poll every 10ms to avoid serial flooding
+            usleep(50000); // ✅ Poll every 50ms
         }
     }
 

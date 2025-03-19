@@ -1,3 +1,5 @@
+#define ENCODER_PIN 5
+
 volatile uint16_t t_on = 0;  
 volatile uint16_t t_off = 0; 
 volatile bool newData = false;
@@ -6,90 +8,67 @@ unsigned long lastSendTime = 0;
 
 void setup() 
 {
-  cli(); 
+    Serial.begin(115200);
+    pinMode(ENCODER_PIN, INPUT);
 
-  Serial.begin(115200);
+    // ✅ Timer3 setup (Pin 5 → ICP3)
+    TCCR3A = 0b00000000;
+    TCCR3B = 0b11000010; // Falling edge, prescaler = 8
+    TCCR3C = 0b00000000;
+    TIMSK3 = 0b00100001; // Enable input capture interrupt + overflow interrupt
 
-  DDRA = 0b00000011;  
-  PORTA = 0b00000000; 
+    Serial.println("Encoder on Timer3 ready...");
+}
 
-  DDRD  = 0b00000000;
-  EICRA = 0b00001111;
-  EIMSK = 0b00000011;
+ISR(TIMER3_CAPT_vect) {
+    static uint16_t lastCapture = 0;
+    static bool measuringOnTime = true;
+    uint16_t currentCapture = ICR3;
 
-  TCCR1A = 0b00000000;
-  TCCR1B = 0b00001010;
-  TCCR1C = 0b00000000;
+    if (measuringOnTime) {
+        t_on = currentCapture - lastCapture;
+        TCCR3B ^= (1 << ICES3); // Switch to capture rising edge next
+    } 
+    else {
+        t_off = currentCapture - lastCapture;
+        newData = true;
+        TCCR3B ^= (1 << ICES3); // Switch to capture falling edge next
+    }
 
-  OCR1A = 999;
-  TIMSK1 = 0b00000010;
-  
-  DDRL &= ~(1 << PL1);
+    measuringOnTime = !measuringOnTime;
+    lastCapture = currentCapture;
+}
 
-  TCCR5A = 0b00000000;
-  TCCR5B = 0b11000010;
-  TCCR5C = 0b00000000;
-  TIMSK5 = 0b00100001;
+float readEncoderAngle() {
+    if (newData) {
+        cli();  
+        uint16_t highTime = t_on;
+        uint16_t lowTime = t_off;
+        newData = false;
+        sei();
 
-  sei(); 
+        float t_on_us = highTime * 0.5;
+        float t_off_us = lowTime * 0.5;
+
+        float x = ((t_on_us * 1026) / (t_on_us + t_off_us)) - 1;
+        uint16_t position = (x <= 1022) ? x : 1023;
+
+        // ✅ Convert to angle (0-360 degrees)
+        float angle = (position * 360.0) / 1024.0;
+        return angle;
+    }
+    return -1;
 }
 
 void loop() 
 {
-  // ✅ Send encoder angle every 1 second
-  if (millis() - lastSendTime >= 1000) {
-    lastSendTime = millis();
+    if (millis() - lastSendTime >= 1000) {
+        lastSendTime = millis();
 
-    float angle = readEncoderAngle();
-    if (angle >= 0) {
-      Serial.print("Angle: ");
-      Serial.println(angle);
+        float angle = readEncoderAngle();
+        if (angle >= 0) {
+            Serial.print("Angle: ");
+            Serial.println(angle);
+        }
     }
-  }
-}
-
-ISR(TIMER1_COMPA_vect) 
-{
-  PINA = 0b00000011;
-}
-
-ISR(TIMER5_CAPT_vect) 
-{
-  static uint16_t lastCapture = 0;
-  static bool measuringOnTime = true;
-  uint16_t currentCapture = ICR5;
-
-  if (measuringOnTime) {
-    t_on = currentCapture - lastCapture;
-    TCCR5B ^= (1 << ICES5);
-  } 
-  else {
-    t_off = currentCapture - lastCapture;
-    newData = true;
-    TCCR5B ^= (1 << ICES5);
-  }
-
-  measuringOnTime = !measuringOnTime;
-  lastCapture = currentCapture;
-}
-
-float readEncoderAngle() {
-  if (newData) {
-    cli();  
-    uint16_t highTime = t_on;
-    uint16_t lowTime = t_off;
-    newData = false;
-    sei();
-
-    float t_on_us = highTime * 0.5;
-    float t_off_us = lowTime * 0.5;
-
-    float x = ((t_on_us * 1026) / (t_on_us + t_off_us)) - 1;
-    uint16_t position = (x <= 1022) ? x : 1023;
-
-    // ✅ Convert encoder position (0–1023) to angle (0–360 degrees)
-    float angle = (position * 360.0) / 1024.0;
-    return angle;
-  }
-  return -1;
 }

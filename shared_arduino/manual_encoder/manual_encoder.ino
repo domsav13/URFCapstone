@@ -3,7 +3,7 @@ volatile uint16_t t_off = 0;
 volatile bool newData = false;
 float targetPosition = -1;
 bool motorEnabled = false;
-const float POSITION_TOLERANCE = 1.0;
+const float POSITION_TOLERANCE = 1.0; 
 unsigned long lastSendTime = 0;
 bool targetReached = false;
 
@@ -14,7 +14,14 @@ void setup() {
     cli();
 
     Serial.begin(115200);
-    while (!Serial) {}
+    
+    // ✅ Add a small delay to prevent reset loop
+    delay(100);
+
+    // ✅ Wait for serial connection to stabilize
+    while (!Serial) {
+        delay(10);
+    }
 
     // ✅ Confirm serial is working
     Serial.println("Serial connection established!");
@@ -28,7 +35,7 @@ void setup() {
     EICRA = 0b00001111;
     EIMSK = 0b00000011;
 
-    // ✅ Slow down step signal for debugging (100 Hz)
+    // ✅ Step signal at ~100 Hz
     TCCR1A = 0b00000000;
     TCCR1B = 0b00001011;  // Prescaler = 64 → slower stepping
     TCCR1C = 0b00000000;
@@ -47,11 +54,8 @@ void setup() {
 
 ISR(TIMER1_COMPA_vect) {
     if (motorEnabled) {
-        // ✅ Direct toggle of step pin for debugging
+        // ✅ Toggle step pin to create step signal
         digitalWrite(STEP_PIN, !digitalRead(STEP_PIN));
-
-        // ✅ Debug signal to confirm ISR is firing
-        Serial.println("ISR firing");
     }
 }
 
@@ -87,15 +91,20 @@ void encoderposition() {
         float x = ((t_on_us * 1026) / (t_on_us + t_off_us)) - 1;
         uint16_t position = (x <= 1022) ? x : 1023;
 
+        // ✅ Convert to degrees (0 to 360)
         float currentAngle = (position * 360.0) / 1024.0;
 
         // ✅ Send data every 50ms
         if (millis() - lastSendTime > 50) {
             lastSendTime = millis();
-            Serial.println(currentAngle);
+
+            // ✅ Only send data if motor is moving
+            if (!targetReached) {
+                Serial.println(currentAngle);
+            }
         }
 
-        // ✅ Stop motor within tolerance
+        // ✅ Stop motor when within tolerance
         if (targetPosition != -1) {
             if (abs(currentAngle - targetPosition) <= POSITION_TOLERANCE) {
                 if (motorEnabled) {
@@ -115,6 +124,7 @@ void encoderposition() {
 }
 
 void loop() {
+    // ✅ Read target position from serial
     if (Serial.available()) {
         targetPosition = Serial.parseFloat();
         Serial.print("Target Angle Set: ");
@@ -123,15 +133,10 @@ void loop() {
         if (targetPosition != -1) {
             motorEnabled = true;
             targetReached = false;
-            digitalWrite(ENABLE_PIN, LOW);  // ✅ Enable driver
-        }
-    }
 
-    // ✅ Direct pin test to confirm motor signal is reaching the driver
-    if (millis() % 1000 < 500) {
-        digitalWrite(STEP_PIN, HIGH);
-    } else {
-        digitalWrite(STEP_PIN, LOW);
+            // ✅ Enable driver explicitly
+            digitalWrite(ENABLE_PIN, LOW);
+        }
     }
 
     encoderposition();

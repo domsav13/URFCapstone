@@ -31,11 +31,25 @@ int openSerialPort() {
     return serial;
 }
 
-void sendTargetPosition(int serial, float target) {
-    char buffer[16];
-    snprintf(buffer, sizeof(buffer), "%.2f\n", target);
-    write(serial, buffer, strlen(buffer));
-    printf("Sent target position: %.2f degrees\n", target);
+void sendCommand(int serial, const char *command) {
+    write(serial, command, strlen(command));
+    write(serial, "\n", 1);
+    printf("Sent: %s\n", command);
+}
+
+float readCurrentAngle(int serial) {
+    char buffer[64];
+    float angle = -1;
+
+    int n = read(serial, buffer, sizeof(buffer) - 1);
+    if (n > 0) {
+        buffer[n] = '\0';
+        if (sscanf(buffer, "Angle: %f", &angle) == 1) {
+            printf("Current Angle: %.2f degrees\n", angle);
+        }
+    }
+
+    return angle;
 }
 
 int main() {
@@ -43,15 +57,31 @@ int main() {
     float targetPosition;
 
     while (1) {
-        printf("Enter target position (0-360 degrees, or -1 to exit): ");
+        printf("Enter target position (0-360 degrees, -1 to exit): ");
         scanf("%f", &targetPosition);
 
         if (targetPosition < 0 || targetPosition > 360) {
             printf("Exiting program.\n");
+            sendCommand(serial, "OFF");
             break;
         }
 
-        sendTargetPosition(serial, targetPosition);
+        sendCommand(serial, "ON");
+        usleep(100000);  // Small delay to stabilize
+
+        char buffer[16];
+        snprintf(buffer, sizeof(buffer), "%.2f", targetPosition);
+        sendCommand(serial, buffer);
+
+        while (1) {
+            float currentAngle = readCurrentAngle(serial);
+            if (currentAngle >= 0 && fabs(currentAngle - targetPosition) <= 1.0) {
+                printf("Target position reached!\n");
+                sendCommand(serial, "OFF");
+                break;
+            }
+            usleep(100000); // ✅ Poll every 100ms
+        }
     }
 
     close(serial);

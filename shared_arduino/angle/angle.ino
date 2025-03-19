@@ -44,6 +44,9 @@ void loop() {
     if (Serial.available()) {
         targetPosition = Serial.parseFloat();
 
+        // ✅ FLUSH SERIAL BUFFER to clear any remaining data
+        Serial.flush();
+
         if (targetPosition >= 0 && targetPosition <= 360) {
             moveMotor(targetPosition);
         }

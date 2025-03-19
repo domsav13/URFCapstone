@@ -10,7 +10,13 @@ void setup() {
     cli();
 
     Serial.begin(115200);
-
+    while (!Serial) {
+        // ✅ Wait until serial connection is established
+    }
+    
+    // ✅ Confirm that serial is working
+    Serial.println("Serial connection established!");
+    
     DDRA = 0b00000001; // Pin 22 for step
     PORTA = 0b00000000;
 
@@ -30,7 +36,7 @@ void setup() {
     TCCR5C = 0b00000000;
     TIMSK5 = 0b00100001;
 
-    sei();
+    sei();  
 }
 
 ISR(TIMER1_COMPA_vect) {
@@ -71,11 +77,15 @@ void encoderposition() {
         float x = ((t_on_us * 1026) / (t_on_us + t_off_us)) - 1;
         uint16_t position = (x <= 1022) ? x : 1023;
 
-        // ✅ Convert to degrees (0 to 360)
+        // ✅ Convert encoder value to degrees (0 to 360)
         float currentAngle = (position * 360.0) / 1024.0;
 
-        // ✅ Throttle output to avoid spamming
-        if (millis() - lastSendTime > 50) { // Send every 50ms
+        // ✅ Debug output to confirm loop is running
+        Serial.print("Angle: ");
+        Serial.println(currentAngle);
+
+        // ✅ Throttle output to avoid spam
+        if (millis() - lastSendTime > 50) { // Every 50ms
             lastSendTime = millis();
             Serial.println(currentAngle);
         }
@@ -85,6 +95,7 @@ void encoderposition() {
             if (abs(currentAngle - targetPosition) <= POSITION_TOLERANCE) {
                 motorEnabled = false;
                 PORTA = 0b00000000;
+                Serial.println("Target reached");
             } else {
                 motorEnabled = true;
             }
@@ -93,6 +104,7 @@ void encoderposition() {
 }
 
 void loop() {
+    // ✅ Read target position from serial
     if (Serial.available()) {
         targetPosition = Serial.parseFloat();
         Serial.print("Target Angle Set: ");

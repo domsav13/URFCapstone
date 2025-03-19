@@ -3,18 +3,22 @@
 #define MICROSTEPS 8
 #define DEG_PER_STEP (360.0 / (STEPS_PER_REV * MICROSTEPS))
 
-volatile uint16_t t_on = 0;  
-volatile uint16_t t_off = 0; 
+volatile uint16_t t_on = 0;
+volatile uint16_t t_off = 0;
 volatile bool newData = false;
 
 float targetPosition = -1;
 const float POSITION_TOLERANCE = 1.0;
+unsigned long lastSendTime = 0;
+bool motorEnabled = false;
 
 void setup() {
     Serial.begin(115200);
     pinMode(STEP_PIN, OUTPUT);
 
-    // Encoder setup
+    Serial.println("Ready");
+
+    // ✅ Encoder setup
     TCCR5A = 0b00000000;
     TCCR5B = 0b11000010; // Falling edge, prescaler = 8
     TCCR5C = 0b00000000;
@@ -63,30 +67,22 @@ float readEncoderAngle() {
 void moveMotor(float target) {
     float currentAngle = readEncoderAngle();
 
-    if (currentAngle < 0) return; // Encoder data not ready
+    if (currentAngle < 0 || !motorEnabled) return; // Encoder data not ready or motor off
 
-    Serial.print("Current Angle: ");
-    Serial.print(currentAngle);
-    Serial.print(", Target: ");
-    Serial.println(target);
+    int steps = (int)((target - currentAngle) / DEG_PER_STEP);
 
-    int steps;
-    if (target > currentAngle) {
-        steps = (int)((target - currentAngle) / DEG_PER_STEP);
-    } else {
-        steps = (int)((currentAngle - target) / DEG_PER_STEP);
-    }
+    if (abs(currentAngle - target) > POSITION_TOLERANCE) {
+        for (int i = 0; i < abs(steps); i++) {
+            // ✅ Stop immediately if motor is turned off
+            if (!motorEnabled) return;
 
-    if (steps > 0) {
-        for (int i = 0; i < steps; i++) {
             digitalWrite(STEP_PIN, HIGH);
-            delayMicroseconds(500);
+            delayMicroseconds(1000);
             digitalWrite(STEP_PIN, LOW);
-            delayMicroseconds(500);
+            delayMicroseconds(1000);
 
             currentAngle = readEncoderAngle();
 
-            // ✅ Stop if within tolerance
             if (abs(currentAngle - target) <= POSITION_TOLERANCE) {
                 Serial.println("Target reached");
                 break;
@@ -96,17 +92,32 @@ void moveMotor(float target) {
 }
 
 void loop() {
-    if (Serial.available()) {
-        targetPosition = Serial.parseFloat();
-
-        // ✅ Flush extra characters
-        while (Serial.available()) {
-            Serial.read();
+    // ✅ Send encoder angle to Pi every second
+    if (millis() - lastSendTime >= 1000) {
+        lastSendTime = millis();
+        float angle = readEncoderAngle();
+        if (angle >= 0) {
+            Serial.print("Angle: ");
+            Serial.println(angle);
         }
+    }
 
-        if (targetPosition >= 0 && targetPosition <= 360) {
-            moveMotor(targetPosition);
-            delay(100);
+    // ✅ Read serial command from Pi
+    if (Serial.available()) {
+        String command = Serial.readStringUntil('\n');
+
+        if (command == "ON") {
+            motorEnabled = true;
+            Serial.println("Motor enabled");
+        } else if (command == "OFF") {
+            motorEnabled = false;
+            Serial.println("Motor stopped");
+        } else {
+            targetPosition = command.toFloat();
+
+            if (targetPosition >= 0 && targetPosition <= 360 && motorEnabled) {
+                moveMotor(targetPosition);
+            }
         }
     }
 }

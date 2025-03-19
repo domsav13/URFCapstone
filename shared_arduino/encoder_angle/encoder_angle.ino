@@ -2,16 +2,16 @@ volatile uint16_t t_on = 0;
 volatile uint16_t t_off = 0; 
 volatile bool newData = false;
 
-unsigned long lastSendTime = 0;  // Track last time angle was sent
+unsigned long lastSendTime = 0;
 
 void setup() 
 {
-  cli(); // Disable interrupts temporarily
+  cli(); 
 
   Serial.begin(115200);
 
-  DDRA = 0b00000011;  // Set pins 22 and 23 as outputs
-  PORTA = 0b00000000; // Set pins 22 and 23 LOW at start
+  DDRA = 0b00000011;  
+  PORTA = 0b00000000; 
 
   DDRD  = 0b00000000;
   EICRA = 0b00001111;
@@ -31,13 +31,11 @@ void setup()
   TCCR5C = 0b00000000;
   TIMSK5 = 0b00100001;
 
-  sei(); // Enable interrupts
+  sei(); 
 }
 
 void loop() 
 {
-  encoderposition();  // Continuously update encoder position
-
   // ✅ Send encoder angle every 1 second
   if (millis() - lastSendTime >= 1000) {
     lastSendTime = millis();
@@ -52,7 +50,7 @@ void loop()
 
 ISR(TIMER1_COMPA_vect) 
 {
-  PINA = 0b00000011; // Toggle PA0 (Pin 22) and PA1 (Pin 23) between H/L
+  PINA = 0b00000011;
 }
 
 ISR(TIMER5_CAPT_vect) 

@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <math.h>
 
 #define SERIAL_PORT "/dev/ttyACM0"
 #define BAUD_RATE B115200

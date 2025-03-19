@@ -3,30 +3,36 @@ volatile uint16_t t_off = 0;
 volatile bool newData = false;
 float targetPosition = -1;
 bool motorEnabled = false;
-const float POSITION_TOLERANCE = 1.0; // ±1 degree tolerance
-unsigned long lastSendTime = 0; // For throttling output
+const float POSITION_TOLERANCE = 1.0;
+unsigned long lastSendTime = 0;
+bool targetReached = false;
+
+#define STEP_PIN 22
+#define ENABLE_PIN 23
 
 void setup() {
     cli();
 
     Serial.begin(115200);
-    while (!Serial) {
-        // ✅ Wait until serial connection is established
-    }
-    
-    // ✅ Confirm that serial is working
+    while (!Serial) {}
+
+    // ✅ Confirm serial is working
     Serial.println("Serial connection established!");
-    
-    DDRA = 0b00000001; // Pin 22 for step
-    PORTA = 0b00000000;
+
+    pinMode(STEP_PIN, OUTPUT);
+    pinMode(ENABLE_PIN, OUTPUT);
+
+    // ✅ Enable motor driver (LOW = enabled for many drivers)
+    digitalWrite(ENABLE_PIN, LOW);
 
     EICRA = 0b00001111;
     EIMSK = 0b00000011;
 
+    // ✅ Slow down step signal for debugging (100 Hz)
     TCCR1A = 0b00000000;
-    TCCR1B = 0b00001010;
+    TCCR1B = 0b00001011;  // Prescaler = 64 → slower stepping
     TCCR1C = 0b00000000;
-    OCR1A = 999;
+    OCR1A = 2499; // (16MHz / (64 * 100 Hz)) - 1
     TIMSK1 = 0b00000010;
 
     DDRL &= ~(1 << PL1);
@@ -41,7 +47,11 @@ void setup() {
 
 ISR(TIMER1_COMPA_vect) {
     if (motorEnabled) {
-        PINA = 0b00000001; // Toggle step pin (digital 22)
+        // ✅ Direct toggle of step pin for debugging
+        digitalWrite(STEP_PIN, !digitalRead(STEP_PIN));
+
+        // ✅ Debug signal to confirm ISR is firing
+        Serial.println("ISR firing");
     }
 }
 
@@ -77,15 +87,10 @@ void encoderposition() {
         float x = ((t_on_us * 1026) / (t_on_us + t_off_us)) - 1;
         uint16_t position = (x <= 1022) ? x : 1023;
 
-        // ✅ Convert encoder value to degrees (0 to 360)
         float currentAngle = (position * 360.0) / 1024.0;
 
-        // ✅ Debug output to confirm loop is running
-        Serial.print("Angle: ");
-        Serial.println(currentAngle);
-
-        // ✅ Throttle output to avoid spam
-        if (millis() - lastSendTime > 50) { // Every 50ms
+        // ✅ Send data every 50ms
+        if (millis() - lastSendTime > 50) {
             lastSendTime = millis();
             Serial.println(currentAngle);
         }
@@ -93,18 +98,23 @@ void encoderposition() {
         // ✅ Stop motor within tolerance
         if (targetPosition != -1) {
             if (abs(currentAngle - targetPosition) <= POSITION_TOLERANCE) {
-                motorEnabled = false;
-                PORTA = 0b00000000;
-                Serial.println("Target reached");
+                if (motorEnabled) {
+                    motorEnabled = false;
+                    digitalWrite(STEP_PIN, LOW);
+                    Serial.println("Target reached");
+                }
+                targetReached = true;
             } else {
-                motorEnabled = true;
+                if (!motorEnabled) {
+                    motorEnabled = true;
+                    targetReached = false;
+                }
             }
         }
     }
 }
 
 void loop() {
-    // ✅ Read target position from serial
     if (Serial.available()) {
         targetPosition = Serial.parseFloat();
         Serial.print("Target Angle Set: ");
@@ -112,7 +122,16 @@ void loop() {
 
         if (targetPosition != -1) {
             motorEnabled = true;
+            targetReached = false;
+            digitalWrite(ENABLE_PIN, LOW);  // ✅ Enable driver
         }
+    }
+
+    // ✅ Direct pin test to confirm motor signal is reaching the driver
+    if (millis() % 1000 < 500) {
+        digitalWrite(STEP_PIN, HIGH);
+    } else {
+        digitalWrite(STEP_PIN, LOW);
     }
 
     encoderposition();

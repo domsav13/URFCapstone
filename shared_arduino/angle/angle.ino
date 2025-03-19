@@ -35,6 +35,9 @@ void moveMotor(float target) {
     }
 
     Serial.println("Target reached");
+
+    // ✅ Clear target to prevent repeat moves
+    targetPosition = -1;
 }
 
 void loop() {

@@ -22,7 +22,7 @@ void moveMotor(float target) {
 
     for (int i = 0; i < abs(steps); i++) {
         digitalWrite(STEP_PIN, HIGH);
-        delayMicroseconds(500); // Adjust for speed
+        delayMicroseconds(500);
         digitalWrite(STEP_PIN, LOW);
         delayMicroseconds(500);
 
@@ -44,11 +44,16 @@ void loop() {
     if (Serial.available()) {
         targetPosition = Serial.parseFloat();
 
-        // ✅ FLUSH SERIAL BUFFER to clear any remaining data
-        Serial.flush();
+        // ✅ MANUALLY FLUSH EXTRA CHARACTERS
+        while (Serial.available()) {
+            Serial.read();
+        }
 
         if (targetPosition >= 0 && targetPosition <= 360) {
             moveMotor(targetPosition);
+
+            // ✅ Short delay to avoid retriggering
+            delay(100);
         }
     }
 }

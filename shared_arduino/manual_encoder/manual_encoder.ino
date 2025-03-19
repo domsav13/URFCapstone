@@ -2,9 +2,10 @@ volatile uint16_t t_on = 0;
 volatile uint16_t t_off = 0;
 volatile bool newData = false;
 int targetPosition = -1;
+bool motorEnabled = false;
 
 void setup() {
-    cli();
+    cli();  // Disable interrupts
 
     Serial.begin(115200);
 
@@ -17,7 +18,7 @@ void setup() {
     TCCR1A = 0b00000000;
     TCCR1B = 0b00001010;
     TCCR1C = 0b00000000;
-    OCR1A = 999;
+    OCR1A = 999; // Step signal every 100 microseconds
     TIMSK1 = 0b00000010;
 
     DDRL &= ~(1 << PL1);
@@ -27,11 +28,13 @@ void setup() {
     TCCR5C = 0b00000000;
     TIMSK5 = 0b00100001;
 
-    sei();
+    sei();  // Enable interrupts
 }
 
 ISR(TIMER1_COMPA_vect) {
-    PINA = 0b00000011;
+    if (motorEnabled) {
+        PINA = 0b00000001; // Toggle step pin (digital 22)
+    }
 }
 
 ISR(TIMER5_CAPT_vect) {
@@ -60,6 +63,7 @@ void encoderposition() {
         newData = false;
         sei();
 
+        // Convert PWM timing to position
         float t_on_us = highTime * 0.5;
         float t_off_us = lowTime * 0.5;
 
@@ -72,25 +76,35 @@ void encoderposition() {
         Serial.print(",");
         Serial.println(position);
 
-        // Move toward target position
+        // ✅ Stop motor when target is reached
         if (targetPosition != -1) {
             if (position < targetPosition) {
+                motorEnabled = true;
                 PORTA = 0b00000001; // Step in one direction
-            } else if (position > targetPosition) {
+            } 
+            else if (position > targetPosition) {
+                motorEnabled = true;
                 PORTA = 0b00000010; // Step in the opposite direction
-            } else {
-                PORTA = 0b00000000; // Stop when target is reached
+            } 
+            else {
+                motorEnabled = false; // Stop motor when target is reached
+                PORTA = 0b00000000;
             }
         }
     }
 }
 
 void loop() {
-    // Read target position from serial
+    // ✅ Read target position from serial
     if (Serial.available()) {
         targetPosition = Serial.parseInt();
         Serial.print("Target Position Set: ");
         Serial.println(targetPosition);
+
+        // ✅ Enable motor if target is set
+        if (targetPosition != -1) {
+            motorEnabled = true;
+        }
     }
 
     encoderposition();

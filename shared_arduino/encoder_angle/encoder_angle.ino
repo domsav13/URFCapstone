@@ -9,6 +9,12 @@ unsigned long lastSendTime = 0;
 void setup() 
 {
     Serial.begin(115200);
+
+    // ✅ Wait for serial connection to stabilize
+    while (!Serial) {
+        delay(10);
+    }
+
     pinMode(ENCODER_PIN, INPUT);
 
     // ✅ Timer3 setup (Pin 5 → ICP3)
@@ -17,6 +23,7 @@ void setup()
     TCCR3C = 0b00000000;
     TIMSK3 = 0b00100001; // Enable input capture interrupt + overflow interrupt
 
+    delay(100);
     Serial.println("Encoder on Timer3 ready...");
 }
 

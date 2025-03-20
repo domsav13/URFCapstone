@@ -4,6 +4,7 @@
 LOG & DESCRIPTIONS:
 3/19/2025: 
 - need to combine Pi --> Arduino angle movement files with encoder files such that the motor can initialize absolute angular positions and move between angle commands according to encoder position. Encoder position is a value between 0 and 1024 that corresponds to an angle 0-360 degrees.
+- Encoder data was observed jumping between positions, maybe due to sampling rate issues or EM interference. Need to be mindful of that.
 
 Working Programs:
 - pi_motor/pi_motor.ino: arduino script that receives ON or OFF command from Pi, triggering motor

@@ -5,13 +5,12 @@ volatile bool newData = false;
 volatile uint8_t recv_buf[16];
 volatile uint8_t recv_len = 0;
 volatile uint8_t err_status = 0;
-volatile uint16_t targetPosition = 800; 
+volatile uint16_t targetPosition = 500; //change the value of this to set where motor stops (or stutters)
 volatile uint16_t position = 0;
-volatile bool motorRun = true;
-
+volatile bool motorRun = false;
 void setup() 
 {
-  cli(); 
+  cli(); //ensures that interrupts don't interfere this block of code
 
   DDRA = 0b00000011;  //sets both pins 22 and 23 as output pins
   PORTA = 0b00000000; //sets both pins 22 and 23 to start at low
@@ -39,39 +38,42 @@ void setup()
   TIMSK5 = 0b00100001;  // Enable Input Capture and Overflow Interrupts
   
   sei();
+
 }
 
 void loop() 
 {
   encoderposition();  // Continuously update encoder position
 
-  if (motorRun && abs(position - targetPosition) <= 50) //if both motorRun=true and within 50 of desired position, stop motor
+  //only sets motorRUn = false if motor is on and within 50 of target position and vice verse
+  if (motorRun && abs((int16_t)position - (int16_t)targetPosition) <= 50) 
   {
-    motorRun = false;  
+    motorRun = false;  // Stop the motor
   }
 
-  
-  if (!motorRun && abs(position - targetPosition) > 150) //if both motorRun=false and within 50 of desired position, start motor
+  if (!motorRun && abs((int16_t)position - (int16_t)targetPosition) >= 150) 
   {
-    motorRun = true;  
+    motorRun = true;   // Restart the motor
   }
-  
-  if (motorRun) //if motor = true, then turn timer and timer interupt on (run motor)
+
+  //only turns of timer/timer interrupt (turn motor off) if motorRun is false and vice versa 
+  if (motorRun) 
   {
     TCCR1B |= ( (1 << 1) | (1 << 3) ); 
     TIMSK1 |= (1 << OCIE1A);
   }
-  else //if motor = false, then turn timer and timer interupt of (stop motor)
+
+  if(!motorRun)
   {
     TCCR1B &= ~( (1 << 1) | (1 << 3) ); 
     TIMSK1 &= ~(1 << OCIE1A); 
-  }
+  } 
 }
 
 //Timer Interrupt to set the stepper motor signal at a specified interval 
 ISR(TIMER1_COMPA_vect) 
 {
-  PINA = 0b00000011; // Toggle PA0 (Pin 22) and PA1 (Pin 23), turn motor on
+  PINA = 0b00000011; // Toggle PA0 (Pin 22) and PA1 (Pin 23) only when moving
 }
 
 //Timer interrupt to trigger once a falling or rising edge is detected 

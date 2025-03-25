@@ -41,12 +41,6 @@ void setup() {
 void loop() {
   encoderPosition(); // Continuously update encoder position
 
-  // Send encoder position over serial every 100 ms
-  static unsigned long lastSendTime = 0;
-  if (millis() - lastSendTime >= 100) {
-    Serial.println(position);
-    lastSendTime = millis();
-  }
 
   if (motorRun && !targetReached) {
     if (abs(position - targetPosition) <= 5) { // ±1 degree tolerance
@@ -131,6 +125,9 @@ void encoderPosition() {
     float x = ((t_on_us * 1026) / (t_on_us + t_off_us)) - 1;
 
     position = (x <= 1022) ? x : 1023;
+    if ((position>0)&&(position<1024)){
+      Serial.println(position);
+    }
   }
 }
 

@@ -37,6 +37,7 @@ int openSerialPort() {
 void sendCommand(int serial, const char *command) {
     write(serial, command, strlen(command));
     write(serial, "\n", 1);
+    tcdrain(serial);
     printf("Sent: %s\n", command);
 }
 

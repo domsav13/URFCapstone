@@ -64,12 +64,10 @@ void loop() {
     if (command == "ON") {
       motorRun = true;
       targetReached = false;
-      Serial.println("Motor ON");
     } 
     else if (command == "OFF") {
       motorRun = false;
       stopMotor();
-      Serial.println("Motor OFF");
     } 
     else if (command.startsWith("TARGET ")) {
       int target = command.substring(7).toInt();

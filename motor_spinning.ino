@@ -2,18 +2,16 @@ volatile uint16_t t_on = 0;  // Stores high-time (PWM on time)
 volatile uint16_t t_off = 0; // Stores low-time (PWM off time)
 volatile bool newData = false;
 
-volatile uint8_t recv_buf[16];
-volatile uint8_t recv_len = 0;
-volatile uint8_t err_status = 0;
-volatile uint16_t targetPosition = 500; //change the value of this to set where motor stops (or stutters)
+volatile uint16_t targetPosition = 400; 
 volatile uint16_t position = 0;
 volatile bool motorRun = false;
+
 void setup() 
 {
   cli(); //ensures that interrupts don't interfere this block of code
 
-  DDRA = 0b00000011;  //sets both pins 22 and 23 as output pins
-  PORTA = 0b00000000; //sets both pins 22 and 23 to start at low
+  DDRA = 0b00001111;  //sets both pins 22,23,24,25 as output pins
+  PORTA = 0b00000000; //sets both pins 22,23,24,25 to start at low
 
   DDRD  = 0b00000000;
   EICRA = 0b00001111;
@@ -24,14 +22,14 @@ void setup()
   TCCR1B = 0b00001010;  // WGM1[3:2] = 10 (CTC mode), CS1[2:0] = 010 (prescaler 8), sets ctc mode on, resets timer to 0 after reach certain time
   TCCR1C = 0b00000000;
 
-  OCR1A = 999; //compare match value of 100 micro sec (e.g switches between H/L every 100micro or with period 200micro)
-  // eqn to calculate above number: (timer clock * time interval / prescaler) - 1
+  OCR1A = 199; //compare match value of 100 micro sec (e.g switches between H/L every 100micro or with period 200micro)
+  // eqn to calculate above number: (timer clock * signal period / 2 * prescaler) - 1
 
   TIMSK1 = 0b00000010; //sets for interrupt to trigger based on the timer 
   
   DDRL &= ~(1 << PL1); //Sets pin 48 as an input
 
-  TCCR5A = 0b00000000;  // Normal mode
+  TCCR5A = 0b00000000;  
   TCCR5B = 0b11000010;  // Input capture on falling edge, Prescaler = 8 (2MHz clock)
   TCCR5C = 0b00000000;
 
@@ -45,19 +43,26 @@ void loop()
 {
   encoderposition();  // Continuously update encoder position
 
-  //only sets motorRUn = false if motor is on and within 50 of target position and vice verse
+  if ((int16_t)position - (int16_t)targetPosition < 512)
+  {
+    PORTA &= ~(1 << 2);
+  }
+  else
+  {
+    PORTA |= (1 << 2);
+  }
+
   if (motorRun && abs((int16_t)position - (int16_t)targetPosition) <= 50) 
   {
     motorRun = false;  // Stop the motor
   }
 
-  if (!motorRun && abs((int16_t)position - (int16_t)targetPosition) >= 150) 
+  if (!motorRun && abs((int16_t)position - (int16_t)targetPosition) >= 60) 
   {
     motorRun = true;   // Restart the motor
   }
 
-  //only turns of timer/timer interrupt (turn motor off) if motorRun is false and vice versa 
-  if (motorRun) 
+  if (motorRun) //do this to completely disable timer when motor running is false instead of checking its values during every interrupt
   {
     TCCR1B |= ( (1 << 1) | (1 << 3) ); 
     TIMSK1 |= (1 << OCIE1A);
@@ -67,7 +72,7 @@ void loop()
   {
     TCCR1B &= ~( (1 << 1) | (1 << 3) ); 
     TIMSK1 &= ~(1 << OCIE1A); 
-  } 
+  }
 }
 
 //Timer Interrupt to set the stepper motor signal at a specified interval 

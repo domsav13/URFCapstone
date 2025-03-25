@@ -41,6 +41,17 @@ void setup() {
 void loop() {
   encoderPosition(); // Continuously update encoder position
 
+  if (motorRun)
+  {
+    TCCR1B |= ( (1 << 1) | (1 << 3) );
+    TIMSK1 |= (1 << OCIE1A;
+  }
+
+  if (!motorRun)
+  {
+    TCCR1B &= ~( (1 << 1) | (1 << 3) );
+    TIMSK1 &= ~(1 << OCIE1A);
+  }
 
   if (motorRun && !targetReached) {
     if (abs(position - targetPosition) <= 5) { // ±1 degree tolerance
@@ -82,9 +93,9 @@ void loop() {
 
 // Timer1 interrupt for motor control signal
 ISR(TIMER1_COMPA_vect) {
-  if (motorRun) {
     PINA = 0b00000011; // Toggle CLOCK_PIN and DIRECTION_PIN
-  }
+
+    
 }
 
 // Timer5 interrupt for encoder pulse measurement

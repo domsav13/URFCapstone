@@ -44,12 +44,18 @@ void sendCommand(int serial, const char *command) {
 // Read encoder position from Arduino
 int readEncoderPosition(int serial) {
     char buffer[32];
-    int n = read(serial, buffer, sizeof(buffer) - 1);
-    if (n > 0) {
-        buffer[n] = '\0';
-        int position = atoi(buffer);
-        return position;
+    int index = 0;
+    char c;
+
+    while (read(serial, &c, 1) == 1) {
+        if (c == '\n') {
+            buffer[index] = '\0';
+            return atoi(buffer);
+        } else if (index < sizeof(buffer) - 1) {
+            buffer[index++] = c;
+        }
     }
+
     return -1;
 }
 

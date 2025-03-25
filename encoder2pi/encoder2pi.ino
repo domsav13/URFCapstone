@@ -44,7 +44,7 @@ void loop() {
   if (motorRun)
   {
     TCCR1B |= ( (1 << 1) | (1 << 3) );
-    TIMSK1 |= (1 << OCIE1A;
+    TIMSK1 |= (1 << OCIE1A);
   }
 
   if (!motorRun)

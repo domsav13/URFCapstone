@@ -7,7 +7,7 @@
 
 #define SERIAL_PORT "/dev/ttyACM0"
 #define BAUD_RATE B115200
-#define TOLERANCE 5 // Encoder tolerance for matching
+#define TOLERANCE 50 // Encoder tolerance for matching
 
 // Open serial port
 int openSerialPort() {

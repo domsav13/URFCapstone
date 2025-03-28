@@ -1,5 +1,6 @@
 from flask import Flask, request, render_template_string, redirect, url_for, flash
 import subprocess
+import os
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Replace with a secure key
@@ -31,11 +32,13 @@ HTML = '''
 </html>
 '''
 
+# Use an absolute path for the binary
+MOTOR_CONTROLLER_BINARY = "/home/pi/motor_controller"  # adjust as necessary
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
         try:
-            # Retrieve and validate the angle from the form
             angle = float(request.form['angle'])
             if angle < 0 or angle > 360:
                 flash("Angle must be between 0 and 360.")
@@ -44,18 +47,17 @@ def index():
             flash("Invalid input.")
             return redirect(url_for('index'))
 
-        # Execute the C program by providing the angle as input
+        # Execute the C program using the absolute path
         try:
-            # Assuming the compiled C binary is named "motor_controller" and is in the current directory.
-            process = subprocess.run(
-                ["./motor_controller"],
+            result = subprocess.run(
+                [MOTOR_CONTROLLER_BINARY],
                 input=f"{angle}\n",
                 text=True,
                 capture_output=True,
-                check=True
+                check=True,
+                timeout=10  # Optional: ensure the process doesn't hang indefinitely
             )
-            # Flash the output from the C program (stdout)
-            flash("C program output: " + process.stdout)
+            flash("C program output: " + result.stdout)
         except subprocess.CalledProcessError as e:
             flash("Error executing C program: " + e.stderr)
         except Exception as e:

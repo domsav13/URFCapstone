@@ -6,6 +6,7 @@
 #define DEG_PER_STEP (360.0 / (STEPS_PER_REV * MICROSTEPS * GEAR_REDUCTION))
 #define STEP_PULSE_DELAY 100  // in microseconds
 
+// Global state for continuous rotation
 bool continuousMode = false;
 int continuousDirection = 0; // 1 for CW, -1 for CCW
 
@@ -22,13 +23,15 @@ void moveMotor(float degrees) {
     Serial.print(steps);
     Serial.println(" steps");
 
+    // Determine direction and make steps positive
     if (steps >= 0) {
         digitalWrite(DIR_PIN, HIGH); // Clockwise
     } else {
         digitalWrite(DIR_PIN, LOW);  // Counterclockwise
-        steps = -steps;  // Make steps positive for looping.
+        steps = -steps;
     }
 
+    // Pulse the step pin
     for (int i = 0; i < steps; i++) {
         digitalWrite(STEP_PIN, HIGH);
         delayMicroseconds(STEP_PULSE_DELAY);
@@ -39,13 +42,13 @@ void moveMotor(float degrees) {
 }
 
 void continuousStep() {
-    // Set the direction for continuous rotation
+    // Set direction based on continuousDirection
     if (continuousDirection >= 0) {
         digitalWrite(DIR_PIN, HIGH);
     } else {
         digitalWrite(DIR_PIN, LOW);
     }
-    // Pulse one step
+    // Pulse the step pin for one step
     digitalWrite(STEP_PIN, HIGH);
     delayMicroseconds(STEP_PULSE_DELAY);
     digitalWrite(STEP_PIN, LOW);
@@ -53,23 +56,37 @@ void continuousStep() {
 }
 
 void loop() {
+    // Check if there is a command from serial
     if (Serial.available() > 0) {
         String cmd = Serial.readStringUntil('\n');
-        cmd.trim(); // Remove extra whitespace
+        cmd.trim();  // Remove any extra whitespace
 
         if (cmd.equalsIgnoreCase("CW")) {
-            continuousMode = true;
-            continuousDirection = 1;
-            Serial.println("Continuous CW mode activated");
+            // Toggle continuous CW mode
+            if (continuousMode && continuousDirection == 1) {
+                continuousMode = false;
+                Serial.println("Continuous CW mode deactivated");
+            } else {
+                continuousMode = true;
+                continuousDirection = 1;
+                Serial.println("Continuous CW mode activated");
+            }
         } else if (cmd.equalsIgnoreCase("CCW")) {
-            continuousMode = true;
-            continuousDirection = -1;
-            Serial.println("Continuous CCW mode activated");
+            // Toggle continuous CCW mode
+            if (continuousMode && continuousDirection == -1) {
+                continuousMode = false;
+                Serial.println("Continuous CCW mode deactivated");
+            } else {
+                continuousMode = true;
+                continuousDirection = -1;
+                Serial.println("Continuous CCW mode activated");
+            }
         } else if (cmd.equalsIgnoreCase("STOP")) {
+            // Explicit stop command (optional)
             continuousMode = false;
             Serial.println("Continuous mode deactivated");
         } else {
-            // Try to parse a numeric angle
+            // Try to parse a numeric value for a fixed-angle move
             float angle = cmd.toFloat();
             if (angle >= 0 && angle <= 360) {
                 moveMotor(angle);
@@ -78,8 +95,8 @@ void loop() {
             }
         }
     }
-    
-    // If in continuous mode, perform one step on each loop iteration.
+
+    // If continuous mode is enabled, take one continuous step each loop
     if (continuousMode) {
         continuousStep();
     }

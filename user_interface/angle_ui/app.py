@@ -1,11 +1,15 @@
 from flask import Flask, request, render_template_string, redirect, url_for, flash
 import subprocess
 import os
+import logging
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Replace with a secure key
 
-# HTML template for the UI
+# Set up logging to capture debug information.
+logging.basicConfig(level=logging.DEBUG)
+
+# HTML template for the UI.
 HTML = '''
 <!doctype html>
 <html>
@@ -32,8 +36,10 @@ HTML = '''
 </html>
 '''
 
-# Use an absolute path for the binary
-MOTOR_CONTROLLER_BINARY = "/home/pi/Desktop/URFCapstone/user_interface/angle_ui/motor_controller"  # adjust as necessary
+# Dynamically determine the absolute path of the current file's directory
+# and build the path to the 'motor_controller' binary.
+basedir = os.path.dirname(os.path.abspath(__file__))
+MOTOR_CONTROLLER_BINARY = os.path.join(basedir, 'motor_controller')
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -47,20 +53,24 @@ def index():
             flash("Invalid input.")
             return redirect(url_for('index'))
 
-        # Execute the C program using the absolute path
         try:
+            logging.debug("Executing motor controller with angle: %s", angle)
             result = subprocess.run(
                 [MOTOR_CONTROLLER_BINARY],
                 input=f"{angle}\n",
                 text=True,
                 capture_output=True,
                 check=True,
-                timeout=10  # Optional: ensure the process doesn't hang indefinitely
+                timeout=10  # Prevent hanging indefinitely
             )
+            logging.debug("Subprocess stdout: %s", result.stdout)
+            logging.debug("Subprocess stderr: %s", result.stderr)
             flash("C program output: " + result.stdout)
         except subprocess.CalledProcessError as e:
+            logging.error("Subprocess error: %s", e.stderr)
             flash("Error executing C program: " + e.stderr)
         except Exception as e:
+            logging.exception("Unexpected error:")
             flash("An unexpected error occurred: " + str(e))
 
         return redirect(url_for('index'))

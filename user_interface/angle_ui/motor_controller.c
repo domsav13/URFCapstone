@@ -4,12 +4,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <termios.h>
-#include <sys/file.h>
-#include <errno.h>
 
-#define SERIAL_PORT "/dev/ttyACM0"  // Adjust as needed
+#define SERIAL_PORT "/dev/ttyACM0"  // Adjust if necessary
 
-// Open the serial port.
+// Function to open the serial port
 int openSerialPort(const char* port) {
     int fd = open(port, O_RDWR | O_NOCTTY | O_SYNC);
     if (fd < 0) {
@@ -18,11 +16,10 @@ int openSerialPort(const char* port) {
     return fd;
 }
 
-// Configure the serial port.
+// Function to configure the serial port
 int configureSerialPort(int fd, speed_t baudRate) {
     struct termios tty;
     memset(&tty, 0, sizeof tty);
-    
     if (tcgetattr(fd, &tty) != 0) {
         perror("Error from tcgetattr");
         return -1;
@@ -31,17 +28,16 @@ int configureSerialPort(int fd, speed_t baudRate) {
     cfsetospeed(&tty, baudRate);
     cfsetispeed(&tty, baudRate);
 
-    tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;  // 8-bit chars
-    tty.c_iflag &= ~IGNBRK;                      // disable break processing
-    tty.c_lflag = 0;                             // no signaling chars, no echo, no canonical processing
-    tty.c_oflag = 0;                             // no remapping, no delays
-    tty.c_cc[VMIN]  = 0;                         // non-blocking read
-    tty.c_cc[VTIME] = 5;                         // 0.5 seconds read timeout
+    tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;  // 8-bit characters
+    tty.c_iflag &= ~IGNBRK;
+    tty.c_lflag = 0;                             // No canonical processing
+    tty.c_oflag = 0;
+    tty.c_cc[VMIN]  = 0;
+    tty.c_cc[VTIME] = 5;                         // 0.5 seconds timeout
 
-    tty.c_iflag &= ~(IXON | IXOFF | IXANY);        // shut off xon/xoff ctrl
-
-    tty.c_cflag |= (CLOCAL | CREAD);               // ignore modem controls, enable reading
-    tty.c_cflag &= ~(PARENB | PARODD);             // no parity
+    tty.c_iflag &= ~(IXON | IXOFF | IXANY);
+    tty.c_cflag |= (CLOCAL | CREAD);
+    tty.c_cflag &= ~(PARENB | PARODD);
     tty.c_cflag &= ~CSTOPB;
     tty.c_cflag &= ~CRTSCTS;
 
@@ -52,51 +48,54 @@ int configureSerialPort(int fd, speed_t baudRate) {
     return 0;
 }
 
+// Function to wait for "Ready" message from Arduino
+int waitForArduino(int fd) {
+    char buf[64];
+    int total_read = 0;
+    while (total_read < 5) {  // Expecting "Ready" which is 5 characters
+        int n = read(fd, buf + total_read, sizeof(buf) - total_read - 1);
+        if (n > 0) {
+            total_read += n;
+            buf[total_read] = '\0';
+            if (strstr(buf, "Ready")) {
+                printf("Arduino is ready: %s\n", buf);
+                return 0;
+            }
+        } else {
+            // Sleep a bit before trying again
+            usleep(100000); // 100 ms
+        }
+    }
+    fprintf(stderr, "Timeout waiting for Arduino to be ready.\n");
+    return -1;
+}
+
 int main(void) {
-    // Acquire a file lock to ensure only one instance accesses the serial port.
-    int lock_fd = open("/tmp/motor_controller.lock", O_CREAT | O_RDWR, 0666);
-    if (lock_fd < 0) {
-        perror("Error opening lock file");
-        return 1;
-    }
-    if (flock(lock_fd, LOCK_EX | LOCK_NB) < 0) {
-        perror("Unable to acquire lock, another instance might be running");
-        close(lock_fd);
-        return 1;
-    }
-    
     int fd = openSerialPort(SERIAL_PORT);
-    if (fd < 0) {
-        flock(lock_fd, LOCK_UN);
-        close(lock_fd);
-        return 1;
-    }
+    if (fd < 0) return 1;
     
     if (configureSerialPort(fd, B115200) < 0) {
         close(fd);
-        flock(lock_fd, LOCK_UN);
-        close(lock_fd);
         return 1;
     }
     
-    // Delay to allow the Arduino to reset after the serial port is opened.
-    sleep(2);
+    // Instead of a fixed sleep, wait for Arduino's "Ready" message
+    if (waitForArduino(fd) < 0) {
+        close(fd);
+        return 1;
+    }
     
     float angle;
     printf("Enter an angle (0-360 degrees): ");
     if (scanf("%f", &angle) != 1) {
         fprintf(stderr, "Invalid input.\n");
         close(fd);
-        flock(lock_fd, LOCK_UN);
-        close(lock_fd);
         return 1;
     }
     
     if (angle < 0 || angle > 360) {
         fprintf(stderr, "Angle must be between 0 and 360 degrees.\n");
         close(fd);
-        flock(lock_fd, LOCK_UN);
-        close(lock_fd);
         return 1;
     }
     
@@ -111,8 +110,5 @@ int main(void) {
     }
     
     close(fd);
-    // Release the file lock.
-    flock(lock_fd, LOCK_UN);
-    close(lock_fd);
     return 0;
 }

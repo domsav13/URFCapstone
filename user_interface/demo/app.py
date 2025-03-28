@@ -14,18 +14,52 @@ HTML = '''
 <html>
   <head>
     <title>Motor Controller</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background-color: #f5f5f5;
+      }
+      h1, h2 {
+        color: #333;
+      }
+      form {
+        margin-bottom: 20px;
+      }
+      label {
+        font-size: 20px;
+      }
+      input[type="number"] {
+        font-size: 20px;
+        padding: 10px;
+        width: 250px;
+      }
+      input[type="submit"] {
+        font-size: 20px;
+        padding: 10px 20px;
+        margin-right: 10px;
+        cursor: pointer;
+      }
+      .button-group {
+        margin-bottom: 20px;
+      }
+      .flash-messages {
+        color: red;
+        margin-bottom: 20px;
+      }
+    </style>
   </head>
   <body>
     <h1>Motor Controller Interface</h1>
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <ul style="color: red;">
+    <div class="flash-messages">
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
           {% for message in messages %}
-            <li>{{ message }}</li>
+            <p>{{ message }}</p>
           {% endfor %}
-        </ul>
-      {% endif %}
-    {% endwith %}
+        {% endif %}
+      {% endwith %}
+    </div>
     <h2>Set Angle</h2>
     <form method="post">
       <input type="hidden" name="action" value="angle">
@@ -34,23 +68,21 @@ HTML = '''
       <input type="submit" value="Set Angle">
     </form>
     <h2>Continuous Rotation</h2>
-    <form method="post">
-      <input type="hidden" name="action" value="CW">
-      <input type="submit" value="Continuous CW">
-    </form>
-    <form method="post">
-      <input type="hidden" name="action" value="CCW">
-      <input type="submit" value="Continuous CCW">
-    </form>
-    <form method="post">
-      <input type="hidden" name="action" value="STOP">
-      <input type="submit" value="Stop Continuous">
-    </form>
+    <div class="button-group">
+      <form method="post" style="display:inline;">
+        <input type="hidden" name="action" value="CW">
+        <input type="submit" value="Toggle CW">
+      </form>
+      <form method="post" style="display:inline;">
+        <input type="hidden" name="action" value="CCW">
+        <input type="submit" value="Toggle CCW">
+      </form>
+    </div>
   </body>
 </html>
 '''
 
-# Dynamically determine the absolute path to the 'motor_controller' binary.
+# Determine the absolute path of the current file's directory and build the path to the binary.
 basedir = os.path.dirname(os.path.abspath(__file__))
 MOTOR_CONTROLLER_BINARY = os.path.join(basedir, 'motor_controller')
 
@@ -69,7 +101,7 @@ def index():
             except ValueError:
                 flash("Invalid angle input.")
                 return redirect(url_for('index'))
-        elif action in ['CW', 'CCW', 'STOP']:
+        elif action in ['CW', 'CCW']:
             command = action
         else:
             flash("Unknown action.")
@@ -83,7 +115,7 @@ def index():
                 text=True,
                 capture_output=True,
                 check=True,
-                timeout=10  # Prevent indefinite hang
+                timeout=10  # Prevent hanging indefinitely
             )
             logging.debug("Subprocess stdout: %s", result.stdout)
             logging.debug("Subprocess stderr: %s", result.stderr)

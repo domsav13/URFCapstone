@@ -6,7 +6,7 @@
 #define DEG_PER_STEP (360.0 / (STEPS_PER_REV * MICROSTEPS * GEAR_REDUCTION))
 
 // Adjust these delay values to increase speed (ensure they're within safe limits for your driver)
-#define STEP_PULSE_DELAY 200  // in microseconds (adjust from 500 to a lower value)
+#define STEP_PULSE_DELAY 100  // in microseconds (adjust from 500 to a lower value)
 
 void setup() {
     Serial.begin(115200);

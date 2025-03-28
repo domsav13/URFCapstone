@@ -33,7 +33,7 @@ HTML = '''
 '''
 
 # Use an absolute path for the binary
-MOTOR_CONTROLLER_BINARY = "/home/pi/motor_controller"  # adjust as necessary
+MOTOR_CONTROLLER_BINARY = "/home/pi/Desktop/URFCapstone/user_interface/angle_ui/motor_controller"  # adjust as necessary
 
 @app.route('/', methods=['GET', 'POST'])
 def index():

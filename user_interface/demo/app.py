@@ -1,13 +1,10 @@
 from flask import Flask, request, render_template_string, redirect, url_for, flash
-import subprocess
 import os
-import logging
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Replace with a secure key
 
-# Set up logging for debugging.
-logging.basicConfig(level=logging.DEBUG)
+FIFO_PATH = "/tmp/arduino_cmd"
 
 HTML = '''
 <!doctype html>
@@ -15,67 +12,7 @@ HTML = '''
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Motor Controller</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 20px;
-        background-color: #f5f5f5;
-      }
-      .container {
-        max-width: 600px;
-        margin: auto;
-        background: #fff;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      }
-      h1, h2 {
-        text-align: center;
-        color: #333;
-      }
-      form {
-        margin-bottom: 20px;
-      }
-      label {
-        font-size: 18px;
-        display: block;
-        margin-bottom: 8px;
-      }
-      input[type="number"] {
-        font-size: 18px;
-        padding: 10px;
-        width: 100%;
-        box-sizing: border-box;
-        margin-bottom: 10px;
-      }
-      input[type="submit"] {
-        font-size: 18px;
-        padding: 12px;
-        width: 100%;
-        margin-bottom: 10px;
-        cursor: pointer;
-        border: none;
-        border-radius: 4px;
-        background-color: #4CAF50;
-        color: white;
-      }
-      input[type="submit"]:hover {
-        background-color: #45a049;
-      }
-      .flash-messages {
-        color: red;
-        text-align: center;
-        margin-bottom: 20px;
-      }
-      @media (min-width: 600px) {
-        input[type="submit"] {
-          width: auto;
-          display: inline-block;
-          margin-right: 10px;
-        }
-      }
-    </style>
+    <!-- CSS styles omitted for brevity -->
   </head>
   <body>
     <div class="container">
@@ -110,10 +47,13 @@ HTML = '''
 </html>
 '''
 
-# Determine the absolute path of the current file's directory and build the path to the binary.
-basedir = os.path.dirname(os.path.abspath(__file__))
-MOTOR_CONTROLLER_BINARY = os.path.join(basedir, 'motor_controller')
-logging.debug("Motor controller binary: %s", MOTOR_CONTROLLER_BINARY)
+def send_command_fifo(command):
+    """Write a command to the FIFO so the daemon can send it to the Arduino."""
+    try:
+        with open(FIFO_PATH, "w") as fifo:
+            fifo.write(command + "\n")
+    except Exception as e:
+        raise Exception(f"Error writing to FIFO: {e}")
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -137,24 +77,10 @@ def index():
             return redirect(url_for('index'))
             
         try:
-            logging.debug("Executing motor controller with command: %s", command)
-            result = subprocess.run(
-                [MOTOR_CONTROLLER_BINARY],
-                input=f"{command}\n",
-                text=True,
-                capture_output=True,
-                check=True,
-                timeout=10  # Prevent hanging indefinitely
-            )
-            logging.debug("Subprocess stdout: %s", result.stdout)
-            logging.debug("Subprocess stderr: %s", result.stderr)
-            flash("C program output: " + result.stdout)
-        except subprocess.CalledProcessError as e:
-            logging.error("Subprocess error: %s", e.stderr)
-            flash("Error executing C program: " + e.stderr)
+            send_command_fifo(command)
+            flash("Command sent: " + command)
         except Exception as e:
-            logging.exception("Unexpected error:")
-            flash("An unexpected error occurred: " + str(e))
+            flash(str(e))
             
         return redirect(url_for('index'))
     return render_template_string(HTML)

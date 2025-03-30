@@ -4,7 +4,7 @@
 #define MICROSTEPS 8          // Microstepping setting on motor driver
 #define GEAR_REDUCTION 13.76  // Gear reduction factor
 #define DEG_PER_STEP (360.0 / (STEPS_PER_REV * MICROSTEPS * GEAR_REDUCTION))
-#define STEP_PULSE_DELAY 100  // in microseconds
+#define STEP_PULSE_DELAY 90  // in microseconds
 
 // Global state for continuous rotation
 bool continuousMode = false;

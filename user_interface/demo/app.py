@@ -8,15 +8,76 @@ FIFO_PATH = "/tmp/arduino_cmd"
 
 HTML = '''
 <!doctype html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Motor Controller</title>
-    <!-- CSS styles omitted for brevity -->
+    <style>
+      body {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f8f9fa;
+      }
+      .container {
+        max-width: 600px;
+        margin: 20px auto;
+        padding: 20px;
+        background: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      h1, h2 {
+        text-align: center;
+        color: #343a40;
+      }
+      form {
+        margin: 15px 0;
+      }
+      label {
+        font-size: 16px;
+        margin-bottom: 5px;
+        display: block;
+      }
+      input[type="number"] {
+        width: 100%;
+        padding: 12px;
+        margin-bottom: 10px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 16px;
+      }
+      input[type="submit"] {
+        width: 100%;
+        padding: 12px;
+        background-color: #007bff;
+        border: none;
+        color: #fff;
+        font-size: 16px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+      }
+      input[type="submit"]:hover {
+        background-color: #0056b3;
+      }
+      .flash-messages {
+        color: #dc3545;
+        text-align: center;
+        margin-bottom: 10px;
+      }
+      @media (min-width: 600px) {
+        input[type="submit"] {
+          width: auto;
+          display: inline-block;
+          margin: 5px;
+        }
+      }
+    </style>
   </head>
   <body>
     <div class="container">
-      <h1>Motor Controller Interface</h1>
+      <h1>Motor Controller</h1>
       <div class="flash-messages">
         {% with messages = get_flashed_messages() %}
           {% if messages %}

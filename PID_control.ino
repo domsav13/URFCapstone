@@ -7,24 +7,42 @@ volatile uint16_t targetPosition = 400;
 volatile uint16_t position = 0;
 volatile bool motorRun = false;
 
+// Store elapsed time (time difference in seconds)
+volatile uint16_t startTime = 0;  // Timer start value (to calculate elapsed time)
+volatile uint16_t stopTime = 0;
+
+
 volatile float error = 0;
 volatile float prevError = 0;
 volatile float kp = 1;
 
-volatile float dt = 1;   
+volatile float dt = 1;    
 
 volatile float ki = 1;
 volatile float integral = 0;
 
-volatile float kd = 0;
+volatile float kd = 1;
 volatile float derivative = 0;
 
 volatile float pid = 0;
+
+volatile uint16_t ocrMax = 65535;  // Maximum value for OCR1A (16-bit timer), (minimum speed)
+volatile uint16_t ocrMin = 800; //minimum value for ocr1a (max speed)
+
+
+volatile uint8_t send_buf[32];
+volatile uint16_t send_len = 0;
+volatile bool sending = false;
+volatile uint16_t send_index = 0;
+
+
 
 void setup() 
 {
   cli(); //ensures that interrupts don't interfere this block of code
 
+  //pin 22/23: clock
+  //pin 24, 25: direction
   DDRA = 0b00001111;  //sets both pins 22,23,24,25 as output pins
   PORTA = 0b00000000; //sets both pins 22,23,24,25 to start at low
 
@@ -54,10 +72,20 @@ void setup()
   //timer set up for timeinterval in pid control equation 
 
   TCCR3A = 0b00000000;  // Normal port operation
-  TCCR3B = 0b00000001;  // No prescaler, timer clock is the system clock (16 MHz)
+  TCCR3B = 0b00000010;  // Prescaler of 8 so timer counts every 8 clock cycles
   TCCR3C = 0b00000000;  // Normal mode
 
   TCNT3 = 0;  // Set Timer 3 counter to 0
+
+  // Configure UART Registers
+  UCSR0A = 0b00000000;  // Normal speed, no multi-processor mode
+  UCSR0B = 0b10011000;  // Enable RX, TX, and RX Complete Interrupt (RXCIE0)
+  UCSR0C = 0b00000110;  // 8-bit data, 1 stop bit, no parity
+
+  // Baud Rate Configuration for 9600 baud (for a 16MHz clock)
+  UBRR0H = 0b00000000;
+  UBRR0L = 103;
+
   sei();
 
 }
@@ -66,11 +94,18 @@ void loop()
 {
   encoderposition();  // Continuously update encoder position
   
-  uint16_t stopTime = 0;
-  uint16_t startTime = 0;
-
   stopTime = TCNT3;
-  dt = stopTime - startTime;
+  
+  if (TIFR3 & (1 << TOV3)) 
+  {
+  TIFR3 |= (1 << TOV3);  // Clear the overflow flag by writing 1 to it
+  dt = (stopTime + 65536 - startTime) * 8 / 16000000.0;
+  }
+  else
+  {
+    dt = (stopTime - startTime) * 8 / 16000000;
+  }
+  
   TCNT3 = 0;
   startTime = TCNT3; 
   
@@ -94,31 +129,18 @@ void loop()
   }
 
   //motor speed 
-  OCR1A = uint16_t((abs(pid)/30)+ 16); //figure out how to scale this bc idk what the units for the output is or the possible range?
-  //covert the pid output to a velocity or fraction of the max velocity based on the max possible max value of ut and then from there frequency and to ocr1a
+  OCR1A = ocrMin + (((abs(pid)) * (ocrMax - ocrMin)) / (1024));
 
-  /*if (motorRun && abs(error) <= 50) 
-{
-  motorRun = false;  // Stop the motor
+  if (sending) return;  // Prevent starting new transmission if one is ongoing
+
+  send_len = snprintf(send_buf, 32, "%d\n", position);
+  send_index = 0;  // Reset index
+  sending = true;
+
+  UCSR0B |= (1 << UDRIE0);  // Enable UART Data Register Empty interrupt
 }
 
-if (!motorRun && abs(error) >= 60) 
-{
-  motorRun = true;   // Restart the motor
-}
-
-if (motorRun) //do this to completely disable timer when motor running is false instead of checking its values during every interrupt
-{
-  TCCR1B |= ( (1 << 1) | (1 << 3) ); 
-  TIMSK1 |= (1 << OCIE1A);
-}
-
-if(!motorRun)
-{
-  TCCR1B &= ~( (1 << 1) | (1 << 3) ); 
-  TIMSK1 &= ~(1 << OCIE1A); 
-}*/
-}
+  
 
 //Timer Interrupt to set the stepper motor signal at a specified interval 
 ISR(TIMER1_COMPA_vect) 
@@ -168,6 +190,18 @@ void encoderposition()
   }
 }
 
+ISR(USART0_UDRE_vect)
+{
+  static uint16_t idx = 0;  // Keep track of the current byte being sent
 
-
-
+  if (idx < send_len)  // If there are more bytes to send
+  {
+    UDR0 = send_buf[idx++];  // Load next byte into UART register
+  }
+  else
+  {
+    sending = false;  // Mark transmission as complete
+    idx = 0;  // Reset index
+    UCSR0B &= ~(1 << 5);  // Disable UDRE interrupt to stop sending
+  }
+}

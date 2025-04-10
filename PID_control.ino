@@ -8,33 +8,35 @@ volatile uint16_t position = 0;
 volatile bool motorRun = false;
 
 // Store elapsed time (time difference in seconds)
-volatile uint16_t startTime = 0;  // Timer start value (to calculate elapsed time)
-volatile uint16_t stopTime = 0;
+volatile float startTime = 0;  // Timer start value (to calculate elapsed time)
+volatile float stopTime = 0;
 
 
 volatile float error = 0;
 volatile float prevError = 0;
-volatile float kp = 1;
-
 volatile float dt = 1;    
 
+volatile float kp = 1;
+
 volatile float ki = 1;
-volatile float integral = 0;
+volatile float integral = 1;
 
-volatile float kd = 1;
-volatile float derivative = 0;
+volatile float kd = 0.1;
+volatile float derivative = 1;
 
-volatile float pid = 0;
+volatile float pid = 1;
 
 volatile uint16_t ocrMax = 65535;  // Maximum value for OCR1A (16-bit timer), (minimum speed)
 volatile uint16_t ocrMin = 800; //minimum value for ocr1a (max speed)
 
+volatile float tilt_velocity = 1;
 
+/*
 volatile uint8_t send_buf[32];
 volatile uint16_t send_len = 0;
 volatile bool sending = false;
 volatile uint16_t send_index = 0;
-
+*/
 
 
 void setup() 
@@ -76,7 +78,7 @@ void setup()
   TCCR3C = 0b00000000;  // Normal mode
 
   TCNT3 = 0;  // Set Timer 3 counter to 0
-
+  /*
   // Configure UART Registers
   UCSR0A = 0b00000000;  // Normal speed, no multi-processor mode
   UCSR0B = 0b10011000;  // Enable RX, TX, and RX Complete Interrupt (RXCIE0)
@@ -85,7 +87,9 @@ void setup()
   // Baud Rate Configuration for 9600 baud (for a 16MHz clock)
   UBRR0H = 0b00000000;
   UBRR0L = 103;
+  */
 
+  Serial.begin(9600);
   sei();
 
 }
@@ -98,15 +102,16 @@ void loop()
   
   if (TIFR3 & (1 << TOV3)) 
   {
-  TIFR3 |= (1 << TOV3);  // Clear the overflow flag by writing 1 to it
-  dt = (stopTime + 65536 - startTime) * 8 / 16000000.0;
+    TIFR3 |= (1 << TOV3);  // Clear the overflow flag by writing 1 to it
+    dt = (stopTime + 65536 - startTime) / 2000000;
   }
   else
   {
-    dt = (stopTime - startTime) * 8 / 16000000;
+    dt = (stopTime - startTime) / 2000000;
   }
   
   TCNT3 = 0;
+
   startTime = TCNT3; 
   
   prevError = error;
@@ -128,9 +133,15 @@ void loop()
     PORTA &= ~(1 << 2);
   }
 
-  //motor speed 
-  OCR1A = ocrMin + (((abs(pid)) * (ocrMax - ocrMin)) / (1024));
+  tilt_velocity = (((ocrMax - ocrMin) / 1024) * abs (pid)) + ocrMin; //motor speed calculation
 
+  if (tilt_velocity <= ocrMax)
+  {
+    OCR1A = (uint16_t) tilt_velocity ;
+  }
+  
+  Serial.println(position);
+  /*
   if (sending) return;  // Prevent starting new transmission if one is ongoing
 
   send_len = snprintf(send_buf, 32, "%d\n", position);
@@ -138,6 +149,7 @@ void loop()
   sending = true;
 
   UCSR0B |= (1 << UDRIE0);  // Enable UART Data Register Empty interrupt
+  */
 }
 
   
@@ -190,7 +202,7 @@ void encoderposition()
   }
 }
 
-ISR(USART0_UDRE_vect)
+/*ISR(USART0_UDRE_vect)
 {
   static uint16_t idx = 0;  // Keep track of the current byte being sent
 
@@ -204,4 +216,4 @@ ISR(USART0_UDRE_vect)
     idx = 0;  // Reset index
     UCSR0B &= ~(1 << 5);  // Disable UDRE interrupt to stop sending
   }
-}
+}*/

@@ -36,7 +36,7 @@ void setup()
   TCCR1B = 0b00001010;  // WGM1[3:2] = 10 (CTC mode), CS1[2:0] = 010 (prescaler 8), sets ctc mode on, resets timer to 0 after reach certain time
   TCCR1C = 0b00000000;
 
-  OCR1A = 999; //compare match value of 100 micro sec (e.g switches between H/L every 100micro or with period 200micro)
+  OCR1A = 999; //compare match value of 100 (199) micro sec (e.g switches between H/L every 100micro or with period 200micro)
   // eqn to calculate above number: (timer clock * signal period / 2 * prescaler) - 1
 
   TIMSK1 = 0b00000010; //sets for interrupt to trigger based on the timer 
@@ -74,6 +74,7 @@ void setup()
 void loop() 
 {
   tiltEncoderposition();  // Continuously update encoder position
+  panEncoderPosition();
 
   if ((int16_t)tiltPosition - (int16_t)tiltTargetPosition < 512)
   {
@@ -199,8 +200,8 @@ void panEncoderPosition()
     float pan_t_on_us = pan_highTime * 0.5;
     float pan_t_off_us = pan_lowTime * 0.5;
 
-    float x = ((pan_t_on_us * 1026) / (pan_t_on_us + pan_t_off_us)) - 1;
+    float x = (pan_t_on_us / 8191) * 16383;
 
-    panPosition = (x <= 1022) ? x : 1023;
+    panPosition = (x <= 16382) ? x : 16383;
   }
 }

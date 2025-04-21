@@ -39,7 +39,7 @@ static int16_t read_raw_euler(int file, int16_t *roll, int16_t *pitch) {
 }
 
 int main(void) {
-    int file = open(I2C_BUS, O_RDWR | O_RDONLY);
+    int file = open(I2C_BUS, O_RDWR);
     if (file < 0) { perror("Open I2C"); return EXIT_FAILURE; }
     if (ioctl(file, I2C_SLAVE, BNO055_ADDR) < 0) {
         perror("I2C_SLAVE"); close(file); return EXIT_FAILURE;

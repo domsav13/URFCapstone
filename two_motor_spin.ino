@@ -19,8 +19,7 @@ void setup()
   cli(); //ensures that interrupts don't interfere this block of code
 
   //Pins 22, 24, 48 (Timer 5), Timer 1 go to the tilt motor
-  //Pins 23, 25, 7 (Timer 4), Timer 3 go to the pan motor
-
+  //Pins 23, 25, 49 (Timer 4), Timer 3 go to the pan motor
 
   //Setup of Clock and direction singals for both the tilt and pan motors
   DDRA = 0b00001111;  //sets pins 22,23,24,25 as output pins 
@@ -28,7 +27,7 @@ void setup()
 
   //TILT MOTOR
   //Timer 1 Setup for tilt motor signal 
-  DDRD  = 0b00000000;
+  DDRD  = 0b00000000; //External interrupts on pins 2/3 
   EICRA = 0b00001111;
   EIMSK = 0b00000011;
 
@@ -56,11 +55,11 @@ void setup()
   TCCR3B = 0b00001010;  // WGM3[3:2] = 10 (CTC mode), CS3[2:0] = 010 (prescaler 8)
   TCCR3C = 0b00000000;
 
-  OCR3A = 1599; //Adjust this for pan motor speed
+  OCR3A = 150; //Adjust this for pan motor speed ~ between 150 and 350
 
   //Timer 4 Setup for capturing pan encoder signal 
   
-  DDRH &= ~(1 << PH7); // Sets pin 7 as an input for the encoder
+  DDRL &= ~(1 << PL0); // Sets pin 49 as an input for the encoder
 
   TCCR4A = 0b00000000;  
   TCCR4B = 0b11000010;  // Input capture on falling edge, Prescaler = 8 (2MHz clock)

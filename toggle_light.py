@@ -1,45 +1,45 @@
 #!/usr/bin/env python3
-"""
-Simple CLI to toggle a light via GPIO17.
-"""
 import RPi.GPIO as GPIO
 import sys
+import time
 
-# Use BCM pin numbering
 GPIO.setmode(GPIO.BCM)
-REMOTE_PIN = 17
-
-# Set up the pin as an output, defaulting to LOW (off)
-GPIO.setup(REMOTE_PIN, GPIO.OUT, initial=GPIO.LOW)
+REMOTE = 17
 
 def turn_on():
-    GPIO.output(REMOTE_PIN, GPIO.HIGH)
+    # actively pull REMOTE to GND
+    GPIO.setup(REMOTE, GPIO.OUT)
+    GPIO.output(REMOTE, GPIO.LOW)
     print("Light ON")
 
 def turn_off():
-    GPIO.output(REMOTE_PIN, GPIO.LOW)
+    # release pin (float)
+    GPIO.setup(REMOTE, GPIO.IN)
     print("Light OFF")
 
 def usage():
-    print("Usage: python3 toggle_light.py [on|off|toggle]")
+    print("Usage: toggle_light.py [on|off|toggle]")
     sys.exit(1)
 
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        usage()
-
+if __name__=="__main__":
+    if len(sys.argv)!=2: usage()
     cmd = sys.argv[1].lower()
+
+    # We’ll read the pin only if it’s already been set as an output
+    current = None
     try:
-        if cmd == "on":
+        if cmd=="on":
             turn_on()
-        elif cmd == "off":
+        elif cmd=="off":
             turn_off()
-        elif cmd == "toggle":
-            # read current state and flip it
-            state = GPIO.input(REMOTE_PIN)
-            GPIO.output(REMOTE_PIN, not state)
-            print(f"Light {'ON' if not state else 'OFF'} (toggled)")
+        elif cmd=="toggle":
+            # if it’s currently configured as output+LOW, we’re on
+            if GPIO.gpio_function(REMOTE)==GPIO.OUT and GPIO.input(REMOTE)==0:
+                turn_off()
+            else:
+                turn_on()
         else:
             usage()
     finally:
+        time.sleep(0.1)
         GPIO.cleanup()

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>IMU Live Data</title>
+  <style>
+    body{font-family:monospace;white-space:pre;padding:1rem;}
+    #out{line-height:1.2;}
+  </style>
+</head>
+<body>
+  <h1>IMU Live Data</h1>
+  <div id="out">Connecting…</div>
+  <script>
+    const out = document.getElementById('out');
+    const src = new EventSource('/imu_stream');
+    src.onmessage = e => {
+      out.textContent += e.data + '\n';
+      if (out.textContent.length>20000) {
+        out.textContent = out.textContent.slice(-20000);
+      }
+    };
+    src.onerror = () => { out.textContent += '\n[stream error]\n'; src.close(); };
+  </script>
+</body>
+</html>

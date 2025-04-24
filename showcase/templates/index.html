@@ -1,15 +1,14 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Pan/Tilt Control</title>
   <style>
     body{font-family:sans-serif;padding:1rem;}
     .group{margin-bottom:1rem;}
-    button{margin-right:0.5rem;padding:0.5rem 1rem;}
+    button{margin-right:.5rem;padding:.5rem 1rem;}
     input[type=number]{width:4rem;}
-    #msg{font-weight:bold;margin:1rem 0;}
+    #msg{font-weight:bold;}
   </style>
 </head>
 <body>
@@ -18,28 +17,28 @@
 
   <form method="post">
     <div class="group">
-      <label>Pan interval (°):
+      <label>Pan (±°):
         <input type="number" name="pan" step="0.1" value="{{ pan }}">
       </label>
-      <label>Tilt interval (°):
+      <label>Tilt (±°):
         <input type="number" name="tilt" step="0.1" value="{{ tilt }}">
       </label>
       <button type="submit" name="move" value="1">Move</button>
     </div>
-
     <div class="group">
-      <button type="submit" name="cmd" value="CCW_ON">CCW ON</button>
-      <button type="submit" name="cmd" value="CCW_OFF">CCW OFF</button>
-      <button type="submit" name="cmd" value="CW_ON">CW ON</button>
-      <button type="submit" name="cmd" value="CW_OFF">CW OFF</button>
+      <button name="cmd" value="CCW_ON">CCW ON</button>
+      <button name="cmd" value="CCW_OFF">CCW OFF</button>
+      <button name="cmd" value="CW_ON">CW ON</button>
+      <button name="cmd" value="CW_OFF">CW OFF</button>
     </div>
-
     <div class="group">
-      <button type="submit" name="cmd" value="UP_ON">UP ON</button>
-      <button type="submit" name="cmd" value="UP_OFF">UP OFF</button>
-      <button type="submit" name="cmd" value="DOWN_ON">DOWN ON</button>
-      <button type="submit" name="cmd" value="DOWN_OFF">DOWN OFF</button>
+      <button name="cmd" value="UP_ON">UP ON</button>
+      <button name="cmd" value="UP_OFF">UP OFF</button>
+      <button name="cmd" value="DOWN_ON">DOWN ON</button>
+      <button name="cmd" value="DOWN_OFF">DOWN OFF</button>
     </div>
   </form>
+
+  <button onclick="window.open('/imu','_blank')">Open IMU Data</button>
 </body>
 </html>

@@ -1,26 +1,20 @@
-# app.py
 from flask import Flask, render_template, request
-import time
-import subprocess
+import subprocess, time
 
 FIFO_PATH = '/tmp/arduino_cmd'
 IMU_EXEC  = './read_bno055'
 
 app = Flask(__name__)
 
-# ——— Open the FIFO once, line-buffered ———
-# Block until the daemon has opened the read-end
+# open FIFO once, line-buffered
 while True:
     try:
-        fifo = open(FIFO_PATH, 'w', buffering=1)  # line-buffered
+        fifo = open(FIFO_PATH, 'w', buffering=1)
         break
     except OSError:
         time.sleep(0.1)
 
-def get_imu_status():
-    """
-    Run read_bno055, skip to the '---' header, then parse the next line.
-    """
+def get_imu():
     try:
         p = subprocess.Popen([IMU_EXEC],
                              stdout=subprocess.PIPE,
@@ -29,42 +23,40 @@ def get_imu_status():
         for line in p.stdout:
             if line.startswith('---'):
                 data = next(p.stdout).split()
-                if len(data) >= 3:
-                    yaw, roll, pitch = map(float, data[:3])
                 p.kill()
-                return yaw, roll, pitch
+                return map(float, data[:3])
         p.kill()
-    except Exception:
+    except:
         pass
     return None, None, None
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/', methods=['GET','POST'])
 def index():
-    message = None
-    pan  = request.form.get('pan', '')
-    tilt = request.form.get('tilt', '')
+    msg = ''
+    pan = request.form.get('pan','0')
+    tilt= request.form.get('tilt','0')
 
-    # Pan/Tilt POST
-    if request.method == 'POST' and 'move' in request.form:
-        cmd = f"({pan},{tilt})\n"
-        try:
-            fifo.write(cmd)   # newline triggers flush
-            message = f"Command sent: {cmd.strip()}"
-        except Exception as e:
-            message = f"Error sending command: {e}"
+    if request.method=='POST':
+        # toggle commands
+        cmd = request.form.get('cmd')
+        if cmd in ('CW','CCW','UP','DOWN'):
+            fifo.write(cmd + '\n')
+            msg=f'Sent: {cmd}'
+        # vector move
+        elif 'move' in request.form:
+            fifo.write(f'({pan},{tilt})\n')
+            msg=f'Sent: ({pan}, {tilt})°'
 
-    # IMU GET
-    elif request.method == 'GET' and request.args.get('imu'):
-        yaw, roll, pitch = get_imu_status()
-        if yaw is not None:
-            message = f"Yaw: {yaw:.2f}°, Roll: {roll:.2f}°, Pitch: {pitch:.2f}°"
+    elif request.method=='GET' and request.args.get('imu'):
+        y,r,p=get_imu()
+        if y is not None:
+            msg=f"Yaw:{y:.2f}° Roll:{r:.2f}° Pitch:{p:.2f}°"
         else:
-            message = "Error reading IMU"
+            msg="IMU error"
 
     return render_template('index.html',
-                           message=message,
-                           pan=pan,
-                           tilt=tilt)
+                           message=msg,
+                           pan=pan, tilt=tilt)
 
-if __name__ == '__main__':
+if __name__=='__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

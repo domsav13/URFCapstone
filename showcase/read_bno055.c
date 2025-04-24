@@ -58,6 +58,7 @@ int main(void) {
     // zero offsets
     int16_t r0,p0;
     int16_t h0 = read_raw_euler(file, &r0, &p0);
+    if (h0<0) { fprintf(stderr,"Init read failed\n"); close(file); return EXIT_FAILURE; }
     float off_h = h0/16.0f, off_r = r0/16.0f, off_p = p0/16.0f;
 
     printf("Zero offsets → H:%.2f°, R:%.2f°, P:%.2f°\n\n", off_h,off_r,off_p);
@@ -86,7 +87,6 @@ int main(void) {
         float pan_deg  = pan_rad  * (180.0f/M_PI);
         float tilt_deg = tilt_rad * (180.0f/M_PI);
 
-        // print
         printf("%7.2f  %7.2f  %7.2f  %7.2f  %7.2f\n",
                yaw,roll,pitch,pan_deg,tilt_deg);
 

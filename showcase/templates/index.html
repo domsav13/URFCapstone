@@ -1,34 +1,55 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Pan/Tilt &amp; Toggles</title>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pan/Tilt &amp; Toggles</title>
   <style>
     body { font-family: sans-serif; padding:1rem; }
-    .slider { margin:1rem 0; }
-    label { display:block; }
-    input[type=range] { width:100%; }
+    label { display:block; margin:0.5rem 0; }
+    input[type=number] { width:5rem; }
     .buttons { margin:1rem 0; }
-    button { margin-right:0.5rem; padding:0.5rem 1rem; font-size:1rem; }
+    button { margin-right:0.5rem; padding:0.5rem 1rem; }
     #msg { margin:1rem 0; font-weight:bold; color:green; }
   </style>
 </head>
 <body>
   <h1>Pan/Tilt Control &amp; Toggles</h1>
+
   <div id="msg">{{ message or '' }}</div>
 
-  <!-- Sliders -->
-  <div class="slider">
-    <label>Pan (–180°↔+180°): <span id="panVal">{{ pan }}</span>°</label>
-    <input id="panS" type="range" min="-180" max="180" step="1" value="{{ pan }}">
-  </div>
-  <div class="slider">
-    <label>Tilt (0↔135°): <span id="tiltVal">{{ tilt }}</span>°</label>
-    <input id="tiltS" type="range" min="0" max="135" step="1" value="{{ tilt }}">
-  </div>
+  <!-- angle inputs form -->
+  <form id="angleForm">
+    <label>
+      Pan ( –180° → +180° ):
+      <input
+        type="number"
+        id="panField"
+        name="pan"
+        min="-180"
+        max="180"
+        step="0.1"
+        value="{{ pan or 0 }}"
+        required
+      >°
+    </label>
+    <label>
+      Tilt ( 0° → 135° ):
+      <input
+        type="number"
+        id="tiltField"
+        name="tilt"
+        min="0"
+        max="135"
+        step="0.1"
+        value="{{ tilt or 0 }}"
+        required
+      >°
+    </label>
+    <button type="submit" name="move" value="1">Move</button>
+  </form>
 
-  <!-- Toggle Buttons -->
+  <!-- direction toggles -->
   <div class="buttons">
     <button onclick="sendCmd('CW')">CW ↻</button>
     <button onclick="sendCmd('CCW')">CCW ↺</button>
@@ -36,45 +57,53 @@
     <button onclick="sendCmd('DOWN')">DOWN ↓</button>
   </div>
 
-  <!-- IMU button -->
+  <!-- IMU status -->
   <button onclick="getIMU()">Get IMU Status</button>
 
   <script>
-    const panS  = document.getElementById('panS'),
-          tiltS = document.getElementById('tiltS'),
-          panV  = document.getElementById('panVal'),
-          tiltV = document.getElementById('tiltVal'),
-          msg   = document.getElementById('msg');
+    const msg       = document.getElementById('msg');
+    const angleForm = document.getElementById('angleForm');
+    const panField  = document.getElementById('panField');
+    const tiltField = document.getElementById('tiltField');
 
-    function sendPanTilt() {
-      const p = panS.value, t = tiltS.value;
-      panV.textContent  = p;
-      tiltV.textContent = t;
+    angleForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const pan  = panField.value;
+      const tilt = tiltField.value;
+
       fetch('/', {
-        method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:`pan=${p}&tilt=${t}&move=1`
-      }).then(()=> msg.textContent=`Sent: (${p},${t})°`);
-    }
-
-    panS.addEventListener('input', sendPanTilt);
-    tiltS.addEventListener('input', sendPanTilt);
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body:   `pan=${encodeURIComponent(pan)}&tilt=${encodeURIComponent(tilt)}&move=1`
+      })
+      .then(() => {
+        msg.textContent = `Sent angles: (${pan}, ${tilt})°`;
+      })
+      .catch(err => {
+        msg.textContent = `Error: ${err}`;
+        msg.style.color = 'red';
+      });
+    });
 
     function sendCmd(c) {
       fetch('/', {
-        method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:`cmd=${c}`
-      }).then(() => msg.textContent=`Sent: ${c}`);
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body:   `cmd=${c}`
+      })
+      .then(() => {
+        msg.textContent = `Sent: ${c}`;
+      });
     }
 
     function getIMU() {
       fetch('/?imu=1')
-        .then(r=>r.text())
+        .then(r => r.text())
         .then(html => {
           const d = document.createElement('div');
           d.innerHTML = html;
-          msg.textContent = d.querySelector('#msg')?.textContent || '';
+          const newMsg = d.querySelector('#msg') || d.querySelector('div');
+          msg.textContent = newMsg ? newMsg.textContent : '';
         });
     }
   </script>

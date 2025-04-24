@@ -1,8 +1,7 @@
-// pan_tilt_interval_smooth_improved.ino
-// – one-way commands only, no serial output
-// – relative intervals: "30", "-15", "(20,-10)"
-// – UP/DOWN toggle pan motor (pins 22/24), CW/CCW toggle tilt motor (pins 23/25)
-// – pressing opposite direction while running just reverses
+// pan_tilt_direction_only.ino
+// – only UP/DOWN toggles pan motor (pins 22/24)
+// – only CW/CCW toggles tilt motor (pins 23/25)
+// – no angle moves, just continuous stepping in selected direction
 
 #include <Arduino.h>
 
@@ -10,14 +9,15 @@
 #define PAN_DIR_PIN    24
 #define TILT_STEP_PIN  23
 #define TILT_DIR_PIN   25
-#define STEP_DELAY_US  90    // µs between step pulses
+#define STEP_DELAY_US  90    // adjust up if you still see stutter
 
 bool panCont   = false;
-int  panDir    = 1;       // +1=UP, -1=DOWN
+int  panDir    = 1;       // +1 = UP, -1 = DOWN
 
 bool tiltCont  = false;
-int  tiltDir   = 1;       // +1=CW, -1=CCW
+int  tiltDir   = 1;       // +1 = CW, -1 = CCW
 
+// simple ring buffer for incoming commands
 constexpr size_t BUF_SZ = 32;
 char buf[BUF_SZ];
 size_t idx = 0;
@@ -39,84 +39,59 @@ void continuousTiltStep() {
   stepPin(TILT_STEP_PIN);
 }
 
-void movePanTilt(float dPan, float dTilt) {
-  const float panStepDeg  = 360.0f / (200.0f * 8.0f * 13.76f);
-  const float tiltStepDeg = 360.0f / (200.0f * 8.0f * 50.0f);
-
-  long sPan  = lroundf(fabs(dPan)  / panStepDeg);
-  long sTilt = lroundf(fabs(dTilt) / tiltStepDeg);
-
-  digitalWrite(PAN_DIR_PIN,  dPan  >= 0 ? HIGH : LOW);
-  digitalWrite(TILT_DIR_PIN, dTilt >= 0 ? HIGH : LOW);
-
-  long dx = sPan, dy = sTilt, err = dx - dy;
-  while (dx > 0 || dy > 0) {
-    long e2 = err * 2;
-    if (dx > 0 && e2 > -dy) {
-      stepPin(PAN_STEP_PIN);
-      err -= dy; dx--;
-    }
-    if (dy > 0 && e2 < dx) {
-      stepPin(TILT_STEP_PIN);
-      err += dx; dy--;
-    }
-  }
-}
-
 void handleCmd(const char* cmd) {
-  // PAN: UP/DOWN
+  // PAN control: UP / DOWN
   if (strcmp(cmd, "UP") == 0) {
     if (!panCont) {
-      panCont = true; panDir = +1;
-    } else if (panDir != +1) {
+      panCont = true;
+      panDir  = +1;
+    }
+    else if (panDir < 0) {
       panDir = +1;
-    } else {
+    }
+    else {
       panCont = false;
     }
   }
   else if (strcmp(cmd, "DOWN") == 0) {
     if (!panCont) {
-      panCont = true; panDir = -1;
-    } else if (panDir != -1) {
+      panCont = true;
+      panDir  = -1;
+    }
+    else if (panDir > 0) {
       panDir = -1;
-    } else {
+    }
+    else {
       panCont = false;
     }
   }
-  // TILT: CW/CCW
+
+  // TILT control: CW / CCW
   else if (strcmp(cmd, "CW") == 0) {
     if (!tiltCont) {
-      tiltCont = true; tiltDir = +1;
-    } else if (tiltDir != +1) {
+      tiltCont = true;
+      tiltDir  = +1;
+    }
+    else if (tiltDir < 0) {
       tiltDir = +1;
-    } else {
+    }
+    else {
       tiltCont = false;
     }
   }
   else if (strcmp(cmd, "CCW") == 0) {
     if (!tiltCont) {
-      tiltCont = true; tiltDir = -1;
-    } else if (tiltDir != -1) {
+      tiltCont = true;
+      tiltDir  = -1;
+    }
+    else if (tiltDir > 0) {
       tiltDir = -1;
-    } else {
+    }
+    else {
       tiltCont = false;
     }
   }
-  // Relative vector "(dPan,dTilt)"
-  else if (strchr(cmd, ',')) {
-    char tmp[BUF_SZ];
-    strncpy(tmp, cmd, BUF_SZ);
-    char* sep = strchr(tmp, ',');
-    *sep = '\0';
-    float dPan  = atof(tmp);
-    float dTilt = atof(sep + 1);
-    movePanTilt(dPan, dTilt);
-  }
-  // Single pan interval
-  else {
-    float d = atof(cmd);
-    movePanTilt(d, 0.0f);
-  }
+  // ignore any other commands
 }
 
 void setup() {
@@ -128,7 +103,7 @@ void setup() {
 }
 
 void loop() {
-  // Read incoming into buffer
+  // read serial into buffer until newline
   while (Serial.available()) {
     char c = Serial.read();
     if (c == '\n') {
@@ -141,7 +116,7 @@ void loop() {
     }
   }
 
-  // Continuous stepping
+  // continuous stepping
   if (panCont)   continuousPanStep();
   if (tiltCont)  continuousTiltStep();
 }

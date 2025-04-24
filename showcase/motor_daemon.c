@@ -49,7 +49,10 @@ int configureSerialPort(int fd, Baud baudRate) {
     tty.c_cflag |= (CLOCAL | CREAD);             // ignore modem controls, enable reading
     tty.c_cflag &= ~(PARENB | PARODD);           // no parity
     tty.c_cflag &= ~CSTOPB;                      // 1 stop bit
+
+    #ifdef CRTSCTS
     tty.c_cflag &= ~CRTSCTS;                     // no hardware flow control
+    #endif
 
     if (tcsetattr(fd, TCSANOW, &tty) != 0) {
         perror("tcsetattr");
@@ -128,7 +131,7 @@ int main(void) {
         close(serial_fd);
         return 1;
     }
-    // Open dummy write end so the read side never sees EOF
+    // Also open a dummy write end so reads never see EOF
     int dummy_fd = open(FIFO_PATH, O_WRONLY | O_NONBLOCK);
 
     printf("Daemon is running, waiting for commands on %s\n", FIFO_PATH);
@@ -136,23 +139,20 @@ int main(void) {
     char command[64];
     struct timespec pause = { .tv_sec = 0, .tv_nsec = 100000000L }; // 100 ms
 
-    // Main loop: read from FIFO and forward to Arduino
+    // Main loop: read from FIFO, forward to Arduino, then pause briefly
     while (1) {
         ssize_t n = read(fifo_fd, command, sizeof(command) - 1);
         if (n > 0) {
             command[n] = '\0';
-            // Strip trailing newline if present
-            if (n > 0 && command[n - 1] == '\n') {
-                command[n - 1] = '\0';
-            }
-            printf("Received command: '%s'\n", command);
-            if (sendCommand(serial_fd, command) == 0) {
-                printf("Sent to Arduino: '%s'\n", command);
-            }
-        } else if (n < 0) {
+            if (n > 0 && command[n - 1] == '\n')
+                command[n - 1] = '\0';  // strip newline
+            printf("Received: '%s'\n", command);
+            if (sendCommand(serial_fd, command) == 0)
+                printf("Forwarded to Arduino\n");
+        }
+        else if (n < 0) {
             perror("Error reading from FIFO");
         }
-        // Brief pause before checking again
         nanosleep(&pause, NULL);
     }
 

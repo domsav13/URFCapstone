@@ -1,155 +1,90 @@
 // motor_daemon.c
-// Compile with:
-//   gcc -std=c99 -O2 -Wall -o motor_daemon motor_daemon.c
+// Compile: gcc -std=c99 -O2 -Wall -o motor_daemon motor_daemon.c
 
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
-#include <unistd.h>     // open(), read(), write(), close(), usleep()
-#include <sys/stat.h>   // mkfifo()
+#include <unistd.h>    
+#include <sys/stat.h>  
 #include <termios.h>
 #include <errno.h>
+#include <time.h>      
 
-#define SERIAL_PORT  "/dev/ttyACM0"  // Adjust if necessary
-#define FIFO_PATH    "/tmp/arduino_cmd"
+#define SERIAL_PORT "/dev/ttyACM0"
+#define FIFO_PATH   "/tmp/arduino_cmd"
 
 typedef speed_t Baud;
 
-// Open the serial port and return file descriptor
 int openSerialPort(const char* port) {
-    int fd = open(port, O_RDWR | O_NOCTTY | O_SYNC);
-    if (fd < 0) {
-        perror("Error opening serial port");
-    }
-    return fd;
+  int fd = open(port, O_RDWR|O_NOCTTY|O_SYNC);
+  if(fd<0) perror("open");
+  return fd;
 }
 
-// Configure serial port parameters (115200 8N1, no flow control)
-int configureSerialPort(int fd, Baud baudRate) {
-    struct termios tty;
-    memset(&tty, 0, sizeof tty);
-    if (tcgetattr(fd, &tty) != 0) {
-        perror("Error from tcgetattr");
-        return -1;
-    }
-    cfsetospeed(&tty, baudRate);
-    cfsetispeed(&tty, baudRate);
-
-    tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;   // 8-bit chars
-    tty.c_iflag &= ~IGNBRK;                      // disable break processing
-    tty.c_lflag = 0;                             // no signaling chars, no echo, no canonical
-    tty.c_oflag = 0;                             // no remapping, no delays
-    tty.c_cc[VMIN]  = 0;                         // read doesn't block
-    tty.c_cc[VTIME] = 5;                         // 0.5 seconds read timeout
-
-    tty.c_iflag &= ~(IXON | IXOFF | IXANY);      // shut off xon/xoff ctrl
-    tty.c_cflag |= (CLOCAL | CREAD);             // ignore modem controls, enable reading
-    tty.c_cflag &= ~(PARENB | PARODD);           // shut off parity
-    tty.c_cflag &= ~CSTOPB;                      // 1 stop bit
-    tty.c_cflag &= ~CRTSCTS;                     // no hardware flow control
-
-    if (tcsetattr(fd, TCSANOW, &tty) != 0) {
-        perror("Error from tcsetattr");
-        return -1;
-    }
-    return 0;
+int configureSerialPort(int fd, Baud baud) {
+  struct termios t;
+  memset(&t,0,sizeof t);
+  if(tcgetattr(fd,&t)) { perror("tcgetattr"); return -1; }
+  cfsetospeed(&t,baud); cfsetispeed(&t,baud);
+  t.c_cflag=(t.c_cflag&~CSIZE)|CS8;
+  t.c_iflag&=~IGNBRK; t.c_lflag=0; t.c_oflag=0;
+  t.c_cc[VMIN]=0; t.c_cc[VTIME]=5;
+  t.c_iflag&=~(IXON|IXOFF|IXANY);
+  t.c_cflag|=(CLOCAL|CREAD);
+  t.c_cflag&=~(PARENB|PARODD); t.c_cflag&=~CSTOPB;
+  #ifdef CRTSCTS
+    t.c_cflag&=~CRTSCTS;
+  #endif
+  if(tcsetattr(fd,TCSANOW,&t)) { perror("tcsetattr"); return -1; }
+  return 0;
 }
 
-// Wait for "Ready" message from Arduino
-int waitForArduino(int fd) {
-    char buf[64];
-    int total_read = 0;
-    while (total_read < 5) {
-        int n = read(fd, buf + total_read, sizeof(buf) - total_read - 1);
-        if (n > 0) {
-            total_read += n;
-            buf[total_read] = '\0';
-            if (strstr(buf, "Ready")) {
-                printf("Arduino is ready: %s\n", buf);
-                return 0;
-            }
-        } else {
-            usleep(100000); // 100 ms
-        }
-    }
-    fprintf(stderr, "Timeout waiting for Arduino to be ready.\n");
-    return -1;
+int waitReady(int fd) {
+  char b[64]; int tot=0;
+  struct timespec req={.tv_sec=0,.tv_nsec=100000000L};
+  while(tot<5) {
+    int n=read(fd,b+tot,sizeof(b)-tot-1);
+    if(n>0) {
+      tot+=n; b[tot]=0;
+      if(strstr(b,"Ready")) return 0;
+    } else nanosleep(&req,NULL);
+  }
+  return -1;
 }
 
-// Send a command string to Arduino, appending newline
-int sendCommand(int fd, const char* cmd) {
-    char serialCmd[80];
-    int len = snprintf(serialCmd, sizeof(serialCmd), "%s\n", cmd);
-    if (len < 0 || len >= (int)sizeof(serialCmd)) {
-        fprintf(stderr, "Command too long: '%s'\n", cmd);
-        return -1;
-    }
-    int w = write(fd, serialCmd, len);
-    if (w < 0) {
-        perror("Error writing to serial port");
-        return -1;
-    }
-    return 0;
+int sendCmd(int fd,const char*s) {
+  char buf[80]; int len=snprintf(buf,sizeof buf,"%s\n",s);
+  if(len<0||len>=(int)sizeof buf) return -1;
+  return write(fd,buf,len)<0?-1:0;
 }
 
-int main(void) {
-    // Open and configure the serial port
-    int fd = openSerialPort(SERIAL_PORT);
-    if (fd < 0) return 1;
-    if (configureSerialPort(fd, B115200) < 0) {
-        close(fd);
-        return 1;
+int main(){
+  int sd=openSerialPort(SERIAL_PORT);
+  if(sd<0) return 1;
+  if(configureSerialPort(sd,B115200)<0){ close(sd); return 1; }
+  if(waitReady(sd)<0){ close(sd); return 1; }
+
+  if(access(FIFO_PATH,F_OK)==-1)
+    mkfifo(FIFO_PATH,0666);
+
+  int fr=open(FIFO_PATH,O_RDONLY);
+  int fw=open(FIFO_PATH,O_WRONLY|O_NONBLOCK);
+  if(fr<0){ perror("fifo"); close(sd); return 1; }
+
+  printf("Waiting on %s\n",FIFO_PATH);
+  char cmd[64];
+  struct timespec pr={.tv_sec=0,.tv_nsec=50000000L};
+
+  while(1){
+    ssize_t n=read(fr,cmd,sizeof(cmd)-1);
+    if(n>0){
+      cmd[n]=0;
+      if(cmd[n-1]=='\n') cmd[n-1]=0;
+      printf("-> %s\n",cmd);
+      sendCmd(sd,cmd);
     }
-
-    // Wait for Arduino startup message
-    if (waitForArduino(fd) < 0) {
-        close(fd);
-        return 1;
-    }
-
-    // Create FIFO if it doesn't exist
-    if (access(FIFO_PATH, F_OK) == -1) {
-        if (mkfifo(FIFO_PATH, 0666) != 0) {
-            perror("Error creating FIFO");
-            close(fd);
-            return 1;
-        }
-    }
-
-    // Open FIFO for reading commands
-    int fifo_fd = open(FIFO_PATH, O_RDONLY);
-    if (fifo_fd < 0) {
-        perror("Error opening FIFO");
-        close(fd);
-        return 1;
-    }
-
-    char command[64];
-    printf("Daemon is running. Waiting for commands...\n");
-
-    // Main loop: read from FIFO and forward to Arduino
-    while (1) {
-        int n = read(fifo_fd, command, sizeof(command) - 1);
-        if (n > 0) {
-            command[n] = '\0';
-            // Strip trailing newline
-            size_t len = strlen(command);
-            if (len > 0 && command[len - 1] == '\n') {
-                command[len - 1] = '\0';
-            }
-
-            printf("Received command: '%s'\n", command);
-            if (sendCommand(fd, command) == 0) {
-                printf("Sent to Arduino: '%s'\n", command);
-            }
-        } else if (n < 0) {
-            perror("Error reading from FIFO");
-        }
-        usleep(100000);  // 100 ms delay between reads
-    }
-
-    close(fifo_fd);
-    close(fd);
-    return 0;
+    nanosleep(&pr,NULL);
+  }
 }

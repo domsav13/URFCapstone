@@ -6,49 +6,75 @@
   <title>IMU Live Data</title>
   <style>
     :root {
-      --pad: 0.75rem;
+      --pad: 1rem;
       --bg: #222;
       --fg: #0f0;
+      --label-color: #888;
+      --font: monospace;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: monospace;
+      font-family: var(--font);
       background: var(--bg);
       color: var(--fg);
-      padding: var(--pad);
       display: flex;
       flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--pad);
       height: 100vh;
     }
     h1 {
-      margin: 0 0 var(--pad) 0;
-      font-size: 1.25rem;
+      margin-bottom: var(--pad);
+      font-size: 1.5rem;
+      color: var(--fg);
+    }
+    .reading {
+      margin: 0.5rem 0;
       text-align: center;
     }
-    #out {
-      flex: 1;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      line-height: 1.2;
-      padding: var(--pad);
-      background: #111;
-      border-radius: 0.25rem;
+    .value {
+      font-size: 2.5rem;
+      font-weight: bold;
+    }
+    .label {
+      display: block;
+      margin-top: 0.25rem;
+      font-size: 0.9rem;
+      color: var(--label-color);
     }
   </style>
 </head>
 <body>
   <h1>IMU Live Data</h1>
-  <div id="out">Connecting…</div>
+
+  <div class="reading">
+    <span id="yaw"   class="value">--</span>
+    <span class="label">Yaw (°)</span>
+  </div>
+  <div class="reading">
+    <span id="roll"  class="value">--</span>
+    <span class="label">Roll (°)</span>
+  </div>
+  <div class="reading">
+    <span id="pitch" class="value">--</span>
+    <span class="label">Pitch (°)</span>
+  </div>
+
   <script>
-    const out = document.getElementById('out');
+    const yawEl   = document.getElementById('yaw');
+    const rollEl  = document.getElementById('roll');
+    const pitchEl = document.getElementById('pitch');
+
     const src = new EventSource('/imu_stream');
     src.onmessage = e => {
-      out.textContent += e.data + '\n';
-      out.scrollTop = out.scrollHeight;
+      const [y,r,p] = e.data.trim().split(',').map(s => parseFloat(s).toFixed(2));
+      yawEl.textContent   = y;
+      rollEl.textContent  = r;
+      pitchEl.textContent = p;
     };
     src.onerror = () => {
-      out.textContent += '\n[stream error]\n';
       src.close();
     };
   </script>

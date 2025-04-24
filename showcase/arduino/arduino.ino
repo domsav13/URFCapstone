@@ -1,16 +1,16 @@
 #include <Arduino.h>
 
-#define PAN_STEP_PIN       22
-#define PAN_DIR_PIN        24
-#define TILT_STEP_PIN      23
-#define TILT_DIR_PIN       25
+#define PAN_STEP_PIN       23
+#define PAN_DIR_PIN        25
+#define TILT_STEP_PIN      22
+#define TILT_DIR_PIN       24
 #define STEPS_PER_REV      200
 #define MICROSTEPS         8
 #define PAN_GEAR_REDUCTION  13.76f
 #define TILT_GEAR_REDUCTION 50.0f
 #define PAN_DEG_PER_STEP   (360.0f/(STEPS_PER_REV*MICROSTEPS*PAN_GEAR_REDUCTION))
 #define TILT_DEG_PER_STEP  (360.0f/(STEPS_PER_REV*MICROSTEPS*TILT_GEAR_REDUCTION))
-#define STEP_DELAY_US      90
+#define STEP_DELAY_US      150
 
 bool panCont   = false;
 int  panDir    =  1;   // +1 = CW, -1 = CCW

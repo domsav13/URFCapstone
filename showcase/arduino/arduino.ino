@@ -7,7 +7,7 @@
 #define PAN_GEAR_REDUCTION 13.76f  // Pan gear reduction factor
 #define TILT_GEAR_REDUCTION 50.0f  // Tilt gear reduction factor
 #define PAN_DEG_PER_STEP (360.0f / (STEPS_PER_REV * MICROSTEPS * PAN_GEAR_REDUCTION))
-#define TILT_DEG_PER_STEP (135.0f / (STEPS_PER_REV * MICROSTEPS * TILT_GEAR_REDUCTION))
+#define TILT_DEG_PER_STEP (360.0f / (STEPS_PER_REV * MICROSTEPS * TILT_GEAR_REDUCTION))
 #define STEP_PULSE_DELAY 90  // in microseconds
 
 // Global state for continuous pan rotation

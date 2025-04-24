@@ -13,13 +13,13 @@
   <div id="out">Connecting…</div>
   <script>
     const out = document.getElementById('out');
-    const es  = new EventSource('/imu_stream');
-    es.onmessage = e => {
+    const src = new EventSource('/imu_stream');
+    src.onmessage = e => {
       out.textContent += e.data + '\n';
-      if (out.textContent.length>20000)
+      if (out.textContent.length > 20000)
         out.textContent = out.textContent.slice(-20000);
     };
-    es.onerror = () => { out.textContent += '\n[stream error]\n'; es.close(); };
+    src.onerror = () => { out.textContent += '\n[stream error]\n'; src.close(); };
   </script>
 </body>
 </html>

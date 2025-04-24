@@ -1,153 +1,164 @@
-// Pan-Tilt Arduino sketch with absolute slider control
-// Sends relative moves based on last commanded position
+// motor_daemon.c
+// Compile with:
+//   gcc -std=c99 -O2 -Wall -o motor_daemon motor_daemon.c
 
-#define PAN_STEP_PIN        22
-#define PAN_DIR_PIN         24
-#define TILT_STEP_PIN       23
-#define TILT_DIR_PIN        25
+#define _POSIX_C_SOURCE 200809L   // for nanosleep()
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>     // open(), read(), write(), close()
+#include <sys/stat.h>   // mkfifo()
+#include <termios.h>
+#include <errno.h>
+#include <time.h>       // nanosleep()
 
-#define STEPS_PER_REV       200     // motor full steps per revolution
-#define MICROSTEPS          8       // microstepping setting
-#define PAN_GEAR_REDUCTION  13.76f  // gearbox ratio
-#define TILT_GEAR_REDUCTION 50.0f   // gearbox ratio
+#define SERIAL_PORT  "/dev/ttyACM0"
+#define FIFO_PATH    "/tmp/arduino_cmd"
 
-#define PAN_DEG_PER_STEP    (360.0f / (STEPS_PER_REV * MICROSTEPS * PAN_GEAR_REDUCTION))
-#define TILT_DEG_PER_STEP   (360.0f / (STEPS_PER_REV * MICROSTEPS * TILT_GEAR_REDUCTION))
+typedef speed_t Baud;
 
-#define STEP_PULSE_DELAY    90      // microseconds
-
-// continuous‐pan support (if you still use CW/CCW commands)
-bool continuousMode       = false;
-int  continuousDirection  = 0;    // +1 = CW, -1 = CCW
-
-// track last absolute angles so sliders send deltas
-float lastPanAngle        = 0.0f;  // –180…+180
-float lastTiltAngle       = 0.0f;  //  0…135
-
-void setup() {
-  Serial.begin(115200);
-  Serial.setTimeout(10);  // don’t block more than 10 ms on Serial.readStringUntil
-  pinMode(PAN_STEP_PIN,  OUTPUT);
-  pinMode(PAN_DIR_PIN,   OUTPUT);
-  pinMode(TILT_STEP_PIN, OUTPUT);
-  pinMode(TILT_DIR_PIN,  OUTPUT);
-  Serial.println("Ready");
+// Open the serial port and return file descriptor
+int openSerialPort(const char* port) {
+    int fd = open(port, O_RDWR | O_NOCTTY | O_SYNC);
+    if (fd < 0) {
+        perror("Error opening serial port");
+    }
+    return fd;
 }
 
-/**
- * Move the pan & tilt axes by signed relative angles.
- * panDelta:  relative pan degrees (±360)
- * tiltDelta: relative tilt degrees (±135)
- */
-void movePanTilt(float panDelta, float tiltDelta) {
-  long dx = lroundf(fabs(panDelta)  / PAN_DEG_PER_STEP);
-  long dy = lroundf(fabs(tiltDelta) / TILT_DEG_PER_STEP);
-
-  // direction pins by sign
-  digitalWrite(PAN_DIR_PIN,  panDelta  >= 0 ? HIGH : LOW);
-  digitalWrite(TILT_DIR_PIN, tiltDelta >= 0 ? HIGH : LOW);
-
-  long err      = dx - dy;
-  long curPan   = 0;
-  long curTilt  = 0;
-
-  while (curPan < dx || curTilt < dy) {
-    // abort if a new command arrives
-    if (Serial.available()) {
-      Serial.println("Interrupted by new cmd");
-      return;
+// Configure serial port parameters (115200 8N1, no flow control)
+int configureSerialPort(int fd, Baud baudRate) {
+    struct termios tty;
+    memset(&tty, 0, sizeof tty);
+    if (tcgetattr(fd, &tty) != 0) {
+        perror("tcgetattr");
+        return -1;
     }
+    cfsetospeed(&tty, baudRate);
+    cfsetispeed(&tty, baudRate);
 
-    long e2 = err * 2;
-    // step pan
-    if (curPan < dx && e2 > -dy) {
-      digitalWrite(PAN_STEP_PIN, HIGH);
-      delayMicroseconds(STEP_PULSE_DELAY);
-      digitalWrite(PAN_STEP_PIN, LOW);
-      delayMicroseconds(STEP_PULSE_DELAY);
-      err -= dy;
-      curPan++;
-    }
-    // step tilt
-    if (curTilt < dy && e2 < dx) {
-      digitalWrite(TILT_STEP_PIN, HIGH);
-      delayMicroseconds(STEP_PULSE_DELAY);
-      digitalWrite(TILT_STEP_PIN, LOW);
-      delayMicroseconds(STEP_PULSE_DELAY);
-      err += dx;
-      curTilt++;
-    }
-  }
+    tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;   // 8-bit chars
+    tty.c_iflag &= ~IGNBRK;                      // disable break processing
+    tty.c_lflag = 0;                             // no signaling chars, no echo
+    tty.c_oflag = 0;                             // no remapping, no delays
+    tty.c_cc[VMIN]  = 0;                         // read doesn't block
+    tty.c_cc[VTIME] = 5;                         // 0.5 seconds read timeout
 
-  Serial.println("Pan/Tilt target reached");
+    tty.c_iflag &= ~(IXON | IXOFF | IXANY);      // shut off xon/xoff ctrl
+    tty.c_cflag |= (CLOCAL | CREAD);             // ignore modem controls, enable reading
+    tty.c_cflag &= ~(PARENB | PARODD);           // no parity
+    tty.c_cflag &= ~CSTOPB;                      // 1 stop bit
+
+    #ifdef CRTSCTS
+    tty.c_cflag &= ~CRTSCTS;                     // no hardware flow control
+    #endif
+
+    if (tcsetattr(fd, TCSANOW, &tty) != 0) {
+        perror("tcsetattr");
+        return -1;
+    }
+    return 0;
 }
 
-// optional continuous pan stepping
-void continuousStep() {
-  digitalWrite(PAN_DIR_PIN, continuousDirection >= 0 ? HIGH : LOW);
-  digitalWrite(PAN_STEP_PIN, HIGH);
-  delayMicroseconds(STEP_PULSE_DELAY);
-  digitalWrite(PAN_STEP_PIN, LOW);
-  delayMicroseconds(STEP_PULSE_DELAY);
+// Wait for "Ready" message from Arduino, polling every 100 ms
+int waitForArduino(int fd) {
+    char buf[64];
+    int total_read = 0;
+    struct timespec req = { .tv_sec = 0, .tv_nsec = 100000000L }; // 100 ms
+
+    while (total_read < 5) {
+        int n = read(fd, buf + total_read, sizeof(buf) - total_read - 1);
+        if (n > 0) {
+            total_read += n;
+            buf[total_read] = '\0';
+            if (strstr(buf, "Ready")) {
+                printf("Arduino is ready: %s\n", buf);
+                return 0;
+            }
+        } else {
+            if (n < 0) perror("read serial");
+            nanosleep(&req, NULL);
+        }
+    }
+    fprintf(stderr, "Timeout waiting for Arduino\n");
+    return -1;
 }
 
-void loop() {
-  if (Serial.available() > 0) {
-    String cmd = Serial.readStringUntil('\n');
-    cmd.trim();
-
-    // legacy continuous commands
-    if (cmd.equalsIgnoreCase("CW")) {
-      continuousMode      = !(continuousMode && continuousDirection == 1);
-      continuousDirection = 1;
-      Serial.println(continuousMode
-        ? "Continuous CW mode activated"
-        : "Continuous CW mode deactivated"
-      );
+// Send a command string to Arduino, appending newline
+int sendCommand(int fd, const char* cmd) {
+    char serialCmd[80];
+    int len = snprintf(serialCmd, sizeof(serialCmd), "%s\n", cmd);
+    if (len < 0 || len >= (int)sizeof(serialCmd)) {
+        fprintf(stderr, "Command too long: '%s'\n", cmd);
+        return -1;
     }
-    else if (cmd.equalsIgnoreCase("CCW")) {
-      continuousMode      = !(continuousMode && continuousDirection == -1);
-      continuousDirection = -1;
-      Serial.println(continuousMode
-        ? "Continuous CCW mode activated"
-        : "Continuous CCW mode deactivated"
-      );
+    if (write(fd, serialCmd, len) < 0) {
+        perror("Error writing to serial port");
+        return -1;
     }
-    // absolute pan,tilt command "(pan,tilt)"
-    else if (cmd.indexOf(',') >= 0) {
-      if (cmd.startsWith("(") && cmd.endsWith(")")) {
-        cmd = cmd.substring(1, cmd.length() - 1);
-      }
-      int comma = cmd.indexOf(',');
-      float newPan  = cmd.substring(0, comma).toFloat();
-      float newTilt = cmd.substring(comma + 1).toFloat();
+    return 0;
+}
 
-      // compute signed deltas
-      float deltaPan  = newPan  - lastPanAngle;
-      float deltaTilt = newTilt - lastTiltAngle;
-
-      // perform the relative move
-      movePanTilt(deltaPan, deltaTilt);
-
-      // record new absolute positions
-      lastPanAngle  = newPan;
-      lastTiltAngle = newTilt;
+int main(void) {
+    // Open and configure the serial port
+    int serial_fd = openSerialPort(SERIAL_PORT);
+    if (serial_fd < 0) return 1;
+    if (configureSerialPort(serial_fd, B115200) < 0) {
+        close(serial_fd);
+        return 1;
     }
-    // single‐value fallback (absolute pan only)
-    else {
-      float angle = cmd.toFloat();
-      if (angle >= 0 && angle <= 360) {
-        float deltaPan = angle - lastPanAngle;
-        movePanTilt(deltaPan, 0);
-        lastPanAngle = angle;
-      } else {
-        Serial.println("Invalid command");
-      }
-    }
-  }
 
-  // if in continuous mode, keep stepping
-  if (continuousMode) {
-    continuousStep();
-  }
+    // Wait for Arduino startup message
+    if (waitForArduino(serial_fd) < 0) {
+        close(serial_fd);
+        return 1;
+    }
+
+    // Create FIFO if it doesn't exist
+    if (access(FIFO_PATH, F_OK) == -1) {
+        if (mkfifo(FIFO_PATH, 0666) != 0) {
+            perror("Error creating FIFO");
+            close(serial_fd);
+            return 1;
+        }
+    }
+
+    // Open FIFO for reading (blocks until a writer appears)
+    int fifo_fd = open(FIFO_PATH, O_RDONLY);
+    if (fifo_fd < 0) {
+        perror("Error opening FIFO for read");
+        close(serial_fd);
+        return 1;
+    }
+    // Also open a dummy write end so reads never see EOF
+    int dummy_fd = open(FIFO_PATH, O_WRONLY | O_NONBLOCK);
+
+    printf("Daemon is running, waiting for commands on %s\n", FIFO_PATH);
+
+    char command[64];
+    struct timespec pause = { .tv_sec = 0, .tv_nsec = 100000000L }; // 100 ms
+
+    // Main loop: read from FIFO, forward to Arduino, then pause briefly
+    while (1) {
+        ssize_t n = read(fifo_fd, command, sizeof(command) - 1);
+        if (n > 0) {
+            command[n] = '\0';
+            if (n > 0 && command[n - 1] == '\n')
+                command[n - 1] = '\0';  // strip newline
+            printf("Received: '%s'\n", command);
+            if (sendCommand(serial_fd, command) == 0)
+                printf("Forwarded to Arduino\n");
+        }
+        else if (n < 0) {
+            perror("Error reading from FIFO");
+        }
+        nanosleep(&pause, NULL);
+    }
+
+    // Cleanup (never reached)
+    close(dummy_fd);
+    close(fifo_fd);
+    close(serial_fd);
+    return 0;
 }

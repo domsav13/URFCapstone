@@ -1,11 +1,40 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>IMU Live Data</title>
   <style>
-    body{font-family:monospace;white-space:pre;padding:1rem;}
-    #out{line-height:1.2;}
+    :root {
+      --pad: 0.75rem;
+      --bg: #222;
+      --fg: #0f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: monospace;
+      background: var(--bg);
+      color: var(--fg);
+      padding: var(--pad);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    h1 {
+      margin: 0 0 var(--pad) 0;
+      font-size: 1.25rem;
+      text-align: center;
+    }
+    #out {
+      flex: 1;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      line-height: 1.2;
+      padding: var(--pad);
+      background: #111;
+      border-radius: 0.25rem;
+    }
   </style>
 </head>
 <body>
@@ -16,10 +45,12 @@
     const src = new EventSource('/imu_stream');
     src.onmessage = e => {
       out.textContent += e.data + '\n';
-      if (out.textContent.length > 20000)
-        out.textContent = out.textContent.slice(-20000);
+      out.scrollTop = out.scrollHeight;
     };
-    src.onerror = () => { out.textContent += '\n[stream error]\n'; src.close(); };
+    src.onerror = () => {
+      out.textContent += '\n[stream error]\n';
+      src.close();
+    };
   </script>
 </body>
 </html>

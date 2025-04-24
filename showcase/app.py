@@ -1,6 +1,7 @@
+# app.py
 from flask import Flask, render_template, request
-import subprocess
 import time
+import subprocess
 
 FIFO_PATH = '/tmp/arduino_cmd'
 IMU_EXEC  = './read_bno055'
@@ -19,7 +20,6 @@ while True:
 def get_imu_status():
     """
     Run read_bno055, skip to the '---' header, then parse the next line.
-    Returns (yaw, roll, pitch) or (None, None, None) on error.
     """
     try:
         p = subprocess.Popen([IMU_EXEC],
@@ -29,10 +29,10 @@ def get_imu_status():
         for line in p.stdout:
             if line.startswith('---'):
                 data = next(p.stdout).split()
-                p.kill()
                 if len(data) >= 3:
-                    return map(float, data[:3])
-                break
+                    yaw, roll, pitch = map(float, data[:3])
+                p.kill()
+                return yaw, roll, pitch
         p.kill()
     except Exception:
         pass
@@ -40,21 +40,20 @@ def get_imu_status():
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    # Use empty strings so Jinja’s {{ pan or 0 }} falls back to 0
+    message = None
     pan  = request.form.get('pan', '')
     tilt = request.form.get('tilt', '')
-    message = ''
 
-    # Slider or form POST
+    # Pan/Tilt POST
     if request.method == 'POST' and 'move' in request.form:
         cmd = f"({pan},{tilt})\n"
         try:
             fifo.write(cmd)   # newline triggers flush
-            message = f"Command sent: ({pan}, {tilt})°"
+            message = f"Command sent: {cmd.strip()}"
         except Exception as e:
             message = f"Error sending command: {e}"
 
-    # IMU status GET (via ?imu=1)
+    # IMU GET
     elif request.method == 'GET' and request.args.get('imu'):
         yaw, roll, pitch = get_imu_status()
         if yaw is not None:

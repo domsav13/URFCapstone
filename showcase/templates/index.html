@@ -1,0 +1,26 @@
+# --------------------------------------------------
+# Place the following HTML in templates/index.html:
+# --------------------------------------------------
+# <!doctype html>
+# <html lang="en">
+# <head>
+#   <meta charset="UTF-8">
+#   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+#   <title>Pan/Tilt Control</title>
+# </head>
+# <body>
+#   <h1>Pan/Tilt Motor Control</h1>
+#   {% if message %}
+#     <p><strong>{{ message }}</strong></p>
+#   {% endif %}
+#   <form method="post">
+#     <label>Pan (0–360°):
+#       <input type="number" name="pan" step="0.1" min="0" max="360" value="{{ pan }}" required>
+#     </label><br><br>
+#     <label>Tilt (0–135°):
+#       <input type="number" name="tilt" step="0.1" min="0" max="135" value="{{ tilt }}" required>
+#     </label><br><br>
+#     <button type="submit">Move</button>
+#   </form>
+# </body>
+# </html>

@@ -2,18 +2,16 @@
 // Compile with:
 //   gcc -std=c99 -O2 -Wall -o motor_daemon motor_daemon.c
 
-#define _POSIX_C_SOURCE 200809L   // for nanosleep()
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
-#include <unistd.h>     // open(), read(), write(), close()
+#include <unistd.h>     // open(), read(), write(), close(), usleep()
 #include <sys/stat.h>   // mkfifo()
 #include <termios.h>
 #include <errno.h>
-#include <time.h>       // nanosleep()
 
-#define SERIAL_PORT  "/dev/ttyACM0"
+#define SERIAL_PORT  "/dev/ttyACM0"  // Adjust if necessary
 #define FIFO_PATH    "/tmp/arduino_cmd"
 
 typedef speed_t Baud;
@@ -32,7 +30,7 @@ int configureSerialPort(int fd, Baud baudRate) {
     struct termios tty;
     memset(&tty, 0, sizeof tty);
     if (tcgetattr(fd, &tty) != 0) {
-        perror("tcgetattr");
+        perror("Error from tcgetattr");
         return -1;
     }
     cfsetospeed(&tty, baudRate);
@@ -40,33 +38,28 @@ int configureSerialPort(int fd, Baud baudRate) {
 
     tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;   // 8-bit chars
     tty.c_iflag &= ~IGNBRK;                      // disable break processing
-    tty.c_lflag = 0;                             // no signaling chars, no echo
+    tty.c_lflag = 0;                             // no signaling chars, no echo, no canonical
     tty.c_oflag = 0;                             // no remapping, no delays
     tty.c_cc[VMIN]  = 0;                         // read doesn't block
     tty.c_cc[VTIME] = 5;                         // 0.5 seconds read timeout
 
     tty.c_iflag &= ~(IXON | IXOFF | IXANY);      // shut off xon/xoff ctrl
     tty.c_cflag |= (CLOCAL | CREAD);             // ignore modem controls, enable reading
-    tty.c_cflag &= ~(PARENB | PARODD);           // no parity
+    tty.c_cflag &= ~(PARENB | PARODD);           // shut off parity
     tty.c_cflag &= ~CSTOPB;                      // 1 stop bit
-
-    #ifdef CRTSCTS
     tty.c_cflag &= ~CRTSCTS;                     // no hardware flow control
-    #endif
 
     if (tcsetattr(fd, TCSANOW, &tty) != 0) {
-        perror("tcsetattr");
+        perror("Error from tcsetattr");
         return -1;
     }
     return 0;
 }
 
-// Wait for "Ready" message from Arduino, polling every 100 ms
+// Wait for "Ready" message from Arduino
 int waitForArduino(int fd) {
     char buf[64];
     int total_read = 0;
-    struct timespec req = { .tv_sec = 0, .tv_nsec = 100000000L }; // 100 ms
-
     while (total_read < 5) {
         int n = read(fd, buf + total_read, sizeof(buf) - total_read - 1);
         if (n > 0) {
@@ -77,11 +70,10 @@ int waitForArduino(int fd) {
                 return 0;
             }
         } else {
-            if (n < 0) perror("read serial");
-            nanosleep(&req, NULL);
+            usleep(100000); // 100 ms
         }
     }
-    fprintf(stderr, "Timeout waiting for Arduino\n");
+    fprintf(stderr, "Timeout waiting for Arduino to be ready.\n");
     return -1;
 }
 
@@ -93,7 +85,8 @@ int sendCommand(int fd, const char* cmd) {
         fprintf(stderr, "Command too long: '%s'\n", cmd);
         return -1;
     }
-    if (write(fd, serialCmd, len) < 0) {
+    int w = write(fd, serialCmd, len);
+    if (w < 0) {
         perror("Error writing to serial port");
         return -1;
     }
@@ -102,16 +95,16 @@ int sendCommand(int fd, const char* cmd) {
 
 int main(void) {
     // Open and configure the serial port
-    int serial_fd = openSerialPort(SERIAL_PORT);
-    if (serial_fd < 0) return 1;
-    if (configureSerialPort(serial_fd, B115200) < 0) {
-        close(serial_fd);
+    int fd = openSerialPort(SERIAL_PORT);
+    if (fd < 0) return 1;
+    if (configureSerialPort(fd, B115200) < 0) {
+        close(fd);
         return 1;
     }
 
     // Wait for Arduino startup message
-    if (waitForArduino(serial_fd) < 0) {
-        close(serial_fd);
+    if (waitForArduino(fd) < 0) {
+        close(fd);
         return 1;
     }
 
@@ -119,46 +112,44 @@ int main(void) {
     if (access(FIFO_PATH, F_OK) == -1) {
         if (mkfifo(FIFO_PATH, 0666) != 0) {
             perror("Error creating FIFO");
-            close(serial_fd);
+            close(fd);
             return 1;
         }
     }
 
-    // Open FIFO for reading (blocks until a writer appears)
+    // Open FIFO for reading commands
     int fifo_fd = open(FIFO_PATH, O_RDONLY);
     if (fifo_fd < 0) {
-        perror("Error opening FIFO for read");
-        close(serial_fd);
+        perror("Error opening FIFO");
+        close(fd);
         return 1;
     }
-    // Also open a dummy write end so reads never see EOF
-    int dummy_fd = open(FIFO_PATH, O_WRONLY | O_NONBLOCK);
-
-    printf("Daemon is running, waiting for commands on %s\n", FIFO_PATH);
 
     char command[64];
-    struct timespec pause = { .tv_sec = 0, .tv_nsec = 100000000L }; // 100 ms
+    printf("Daemon is running. Waiting for commands...\n");
 
-    // Main loop: read from FIFO, forward to Arduino, then pause briefly
+    // Main loop: read from FIFO and forward to Arduino
     while (1) {
-        ssize_t n = read(fifo_fd, command, sizeof(command) - 1);
+        int n = read(fifo_fd, command, sizeof(command) - 1);
         if (n > 0) {
             command[n] = '\0';
-            if (n > 0 && command[n - 1] == '\n')
-                command[n - 1] = '\0';  // strip newline
-            printf("Received: '%s'\n", command);
-            if (sendCommand(serial_fd, command) == 0)
-                printf("Forwarded to Arduino\n");
-        }
-        else if (n < 0) {
+            // Strip trailing newline
+            size_t len = strlen(command);
+            if (len > 0 && command[len - 1] == '\n') {
+                command[len - 1] = '\0';
+            }
+
+            printf("Received command: '%s'\n", command);
+            if (sendCommand(fd, command) == 0) {
+                printf("Sent to Arduino: '%s'\n", command);
+            }
+        } else if (n < 0) {
             perror("Error reading from FIFO");
         }
-        nanosleep(&pause, NULL);
+        usleep(100000);  // 100 ms delay between reads
     }
 
-    // Cleanup (never reached)
-    close(dummy_fd);
     close(fifo_fd);
-    close(serial_fd);
+    close(fd);
     return 0;
 }

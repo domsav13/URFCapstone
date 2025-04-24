@@ -1,122 +1,50 @@
+<!-- templates/index.html -->
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pan/Tilt & IMU Control</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      padding: 1rem;
-    }
-    .slider-container {
-      margin-bottom: 1.5rem;
-    }
-    label {
-      display: block;
-      margin-bottom: 0.3rem;
-    }
-    input[type="range"] {
-      width: 100%;
-    }
-    #message {
-      margin-top: 1rem;
-      font-weight: bold;
-      color: green;
-    }
-  </style>
 </head>
 <body>
-  <h1>Pan/Tilt Motor Control &amp; IMU Status</h1>
+  <h1>Pan/Tilt Motor Control & IMU Status</h1>
 
   {% if message %}
-    <div id="message">{{ message }}</div>
-  {% else %}
-    <div id="message">&nbsp;</div>
+    <p><strong>{{ message }}</strong></p>
   {% endif %}
 
-  <div class="slider-container">
-    <label for="panSlider">Pan (CCW –180° ↔ 0° ↔ +180° CW): <span id="panVal">{{ pan or 0 }}</span>°</label>
-    <input
-      type="range"
-      id="panSlider"
-      name="pan"
-      min="-180"
-      max="180"
-      step="0.1"
-      value="{{ pan or 0 }}"
-    >
-  </div>
+  <form method="post">
+    <label>Pan (0–360°):
+      <input
+        type="number"
+        name="pan"
+        step="0.1"
+        min="0"
+        max="360"
+        value="{{ pan }}"
+        required
+      >
+    </label>
+    <br><br>
+    <label>Tilt (0–135°):
+      <input
+        type="number"
+        name="tilt"
+        step="0.1"
+        min="0"
+        max="135"
+        value="{{ tilt }}"
+        required
+      >
+    </label>
+    <br><br>
+    <button type="submit" name="move">Move</button>
+  </form>
 
-  <div class="slider-container">
-    <label for="tiltSlider">Tilt (0° ↓ ↔ 135° ↑): <span id="tiltVal">{{ tilt or 0 }}</span>°</label>
-    <input
-      type="range"
-      id="tiltSlider"
-      name="tilt"
-      min="0"
-      max="135"
-      step="0.1"
-      value="{{ tilt or 0 }}"
-    >
-  </div>
+  <br>
 
-  <button id="imuBtn">Get IMU Status</button>
-
-  <script>
-    const panSlider  = document.getElementById('panSlider');
-    const tiltSlider = document.getElementById('tiltSlider');
-    const panVal     = document.getElementById('panVal');
-    const tiltVal    = document.getElementById('tiltVal');
-    const msgDiv     = document.getElementById('message');
-    const imuBtn     = document.getElementById('imuBtn');
-
-    function sendPanTilt(pan, tilt) {
-      fetch('/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body:   `pan=${encodeURIComponent(pan)}&tilt=${encodeURIComponent(tilt)}&move=1`
-      })
-      .then(res => res.text())
-      .then(() => {
-        msgDiv.textContent = `Command sent: (${pan}, ${tilt})°`;
-        msgDiv.style.color = 'green';
-      })
-      .catch(err => {
-        msgDiv.textContent = `Error sending: ${err}`;
-        msgDiv.style.color = 'red';
-      });
-    }
-
-    panSlider.addEventListener('input', () => {
-      const pan  = panSlider.value;
-      const tilt = tiltSlider.value;
-      panVal.textContent  = pan;
-      sendPanTilt(pan, tilt);
-    });
-
-    tiltSlider.addEventListener('input', () => {
-      const pan  = panSlider.value;
-      const tilt = tiltSlider.value;
-      tiltVal.textContent = tilt;
-      sendPanTilt(pan, tilt);
-    });
-
-    imuBtn.addEventListener('click', () => {
-      fetch('/?imu=1')
-        .then(res => res.text())
-        .then(html => {
-          // extract the message portion from the returned HTML
-          const div = document.createElement('div');
-          div.innerHTML = html;
-          const newMsg = div.querySelector('#message');
-          if (newMsg) msgDiv.textContent = newMsg.textContent;
-        })
-        .catch(err => {
-          msgDiv.textContent = `Error reading IMU: ${err}`;
-          msgDiv.style.color = 'red';
-        });
-    });
-  </script>
+  <form method="get">
+    <button type="submit" name="imu" value="1">Get IMU Status</button>
+  </form>
 </body>
 </html>

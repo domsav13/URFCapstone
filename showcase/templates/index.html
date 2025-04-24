@@ -4,7 +4,7 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Pan/Tilt Control</title>
   <style>
-    body{font-family:sans-serif;padding:1rem;}
+    body{font-family:sans-serif; padding:1rem;}
     .group{margin-bottom:1rem;}
     button{margin-right:.5rem;padding:.5rem 1rem;}
     input[type=number]{width:4rem;}
@@ -14,23 +14,26 @@
 <body>
   <h1>Pan/Tilt Control</h1>
   <div id="msg">{{ message }}</div>
+
   <form method="post">
     <div class="group">
-      <label>Pan Δ°:
+      <label>Pan Δ° (CW+/CCW-):
         <input type="number" name="pan" step="0.1" value="{{ pan }}">
       </label>
-      <label>Tilt Δ°:
+      <label>Tilt Δ° (DOWN-/UP+):
         <input type="number" name="tilt" step="0.1" value="{{ tilt }}">
       </label>
       <button type="submit" name="move">Move</button>
     </div>
+
     <div class="group">
-      <button name="cmd" value="CW">CW</button>
-      <button name="cmd" value="CCW">CCW</button>
-      <button name="cmd" value="UP">UP</button>
-      <button name="cmd" value="DOWN">DOWN</button>
+      <button type="submit" name="cmd" value="CW">CW</button>
+      <button type="submit" name="cmd" value="CCW">CCW</button>
+      <button type="submit" name="cmd" value="UP">UP</button>
+      <button type="submit" name="cmd" value="DOWN">DOWN</button>
     </div>
   </form>
+
   <button onclick="window.open('/imu','_blank')">Open IMU Data</button>
 </body>
 </html>

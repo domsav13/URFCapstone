@@ -1,50 +1,82 @@
-<!-- templates/index.html -->
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pan/Tilt & IMU Control</title>
+  <meta charset="utf-8">
+  <title>Pan/Tilt &amp; Toggles</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body { font-family: sans-serif; padding:1rem; }
+    .slider { margin:1rem 0; }
+    label { display:block; }
+    input[type=range] { width:100%; }
+    .buttons { margin:1rem 0; }
+    button { margin-right:0.5rem; padding:0.5rem 1rem; font-size:1rem; }
+    #msg { margin:1rem 0; font-weight:bold; color:green; }
+  </style>
 </head>
 <body>
-  <h1>Pan/Tilt Motor Control & IMU Status</h1>
+  <h1>Pan/Tilt Control &amp; Toggles</h1>
+  <div id="msg">{{ message or '' }}</div>
 
-  {% if message %}
-    <p><strong>{{ message }}</strong></p>
-  {% endif %}
+  <!-- Sliders -->
+  <div class="slider">
+    <label>Pan (–180°↔+180°): <span id="panVal">{{ pan }}</span>°</label>
+    <input id="panS" type="range" min="-180" max="180" step="1" value="{{ pan }}">
+  </div>
+  <div class="slider">
+    <label>Tilt (0↔135°): <span id="tiltVal">{{ tilt }}</span>°</label>
+    <input id="tiltS" type="range" min="0" max="135" step="1" value="{{ tilt }}">
+  </div>
 
-  <form method="post">
-    <label>Pan (0–360°):
-      <input
-        type="number"
-        name="pan"
-        step="0.1"
-        min="0"
-        max="360"
-        value="{{ pan }}"
-        required
-      >
-    </label>
-    <br><br>
-    <label>Tilt (0–135°):
-      <input
-        type="number"
-        name="tilt"
-        step="0.1"
-        min="0"
-        max="135"
-        value="{{ tilt }}"
-        required
-      >
-    </label>
-    <br><br>
-    <button type="submit" name="move">Move</button>
-  </form>
+  <!-- Toggle Buttons -->
+  <div class="buttons">
+    <button onclick="sendCmd('CW')">CW ↻</button>
+    <button onclick="sendCmd('CCW')">CCW ↺</button>
+    <button onclick="sendCmd('UP')">UP ↑</button>
+    <button onclick="sendCmd('DOWN')">DOWN ↓</button>
+  </div>
 
-  <br>
+  <!-- IMU button -->
+  <button onclick="getIMU()">Get IMU Status</button>
 
-  <form method="get">
-    <button type="submit" name="imu" value="1">Get IMU Status</button>
-  </form>
+  <script>
+    const panS  = document.getElementById('panS'),
+          tiltS = document.getElementById('tiltS'),
+          panV  = document.getElementById('panVal'),
+          tiltV = document.getElementById('tiltVal'),
+          msg   = document.getElementById('msg');
+
+    function sendPanTilt() {
+      const p = panS.value, t = tiltS.value;
+      panV.textContent  = p;
+      tiltV.textContent = t;
+      fetch('/', {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:`pan=${p}&tilt=${t}&move=1`
+      }).then(()=> msg.textContent=`Sent: (${p},${t})°`);
+    }
+
+    panS.addEventListener('input', sendPanTilt);
+    tiltS.addEventListener('input', sendPanTilt);
+
+    function sendCmd(c) {
+      fetch('/', {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:`cmd=${c}`
+      }).then(() => msg.textContent=`Sent: ${c}`);
+    }
+
+    function getIMU() {
+      fetch('/?imu=1')
+        .then(r=>r.text())
+        .then(html => {
+          const d = document.createElement('div');
+          d.innerHTML = html;
+          msg.textContent = d.querySelector('#msg')?.textContent || '';
+        });
+    }
+  </script>
 </body>
 </html>

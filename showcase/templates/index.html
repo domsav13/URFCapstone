@@ -8,37 +8,29 @@
     .group{margin-bottom:1rem;}
     button{margin-right:.5rem;padding:.5rem 1rem;}
     input[type=number]{width:4rem;}
-    #msg{font-weight:bold;}
+    #msg{font-weight:bold;margin-bottom:1rem;}
   </style>
 </head>
 <body>
   <h1>Pan/Tilt Control</h1>
   <div id="msg">{{ message }}</div>
-
   <form method="post">
     <div class="group">
-      <label>Pan (±°):
+      <label>Pan Δ°:
         <input type="number" name="pan" step="0.1" value="{{ pan }}">
       </label>
-      <label>Tilt (±°):
+      <label>Tilt Δ°:
         <input type="number" name="tilt" step="0.1" value="{{ tilt }}">
       </label>
-      <button type="submit" name="move" value="1">Move</button>
+      <button type="submit" name="move">Move</button>
     </div>
     <div class="group">
-      <button name="cmd" value="CCW_ON">CCW ON</button>
-      <button name="cmd" value="CCW_OFF">CCW OFF</button>
-      <button name="cmd" value="CW_ON">CW ON</button>
-      <button name="cmd" value="CW_OFF">CW OFF</button>
-    </div>
-    <div class="group">
-      <button name="cmd" value="UP_ON">UP ON</button>
-      <button name="cmd" value="UP_OFF">UP OFF</button>
-      <button name="cmd" value="DOWN_ON">DOWN ON</button>
-      <button name="cmd" value="DOWN_OFF">DOWN OFF</button>
+      <button name="cmd" value="CW">CW</button>
+      <button name="cmd" value="CCW">CCW</button>
+      <button name="cmd" value="UP">UP</button>
+      <button name="cmd" value="DOWN">DOWN</button>
     </div>
   </form>
-
   <button onclick="window.open('/imu','_blank')">Open IMU Data</button>
 </body>
 </html>

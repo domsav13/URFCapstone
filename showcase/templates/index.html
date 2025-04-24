@@ -3,110 +3,43 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Pan/Tilt &amp; Toggles</title>
+  <title>Pan/Tilt Control</title>
   <style>
-    body { font-family: sans-serif; padding:1rem; }
-    label { display:block; margin:0.5rem 0; }
-    input[type=number] { width:6rem; }
-    .buttons { margin:1rem 0; }
-    button { margin-right:0.5rem; padding:0.5rem 1rem; }
-    #msg { margin:1rem 0; font-weight:bold; }
+    body{font-family:sans-serif;padding:1rem;}
+    .group{margin-bottom:1rem;}
+    button{margin-right:0.5rem;padding:0.5rem 1rem;}
+    input[type=number]{width:4rem;}
+    #msg{font-weight:bold;margin:1rem 0;}
   </style>
 </head>
 <body>
-  <h1>Pan/Tilt Control &amp; Toggles</h1>
+  <h1>Pan/Tilt Control</h1>
+  <div id="msg">{{ message }}</div>
 
-  <div id="msg">{{ message or '' }}</div>
+  <form method="post">
+    <div class="group">
+      <label>Pan interval (°):
+        <input type="number" name="pan" step="0.1" value="{{ pan }}">
+      </label>
+      <label>Tilt interval (°):
+        <input type="number" name="tilt" step="0.1" value="{{ tilt }}">
+      </label>
+      <button type="submit" name="move" value="1">Move</button>
+    </div>
 
-  <form id="angleForm">
-    <label>
-      Pan (–180°…+180°):
-      <input
-        type="number"
-        id="panField"
-        name="pan"
-        min="-180"
-        max="180"
-        step="0.1"
-        value="{{ pan }}"
-        required
-      >°
-    </label>
-    <label>
-      Tilt (0°…135°):
-      <input
-        type="number"
-        id="tiltField"
-        name="tilt"
-        min="0"
-        max="135"
-        step="0.1"
-        value="{{ tilt }}"
-        required
-      >°
-    </label>
-    <button type="submit" name="move" value="1">Move</button>
+    <div class="group">
+      <button type="submit" name="cmd" value="CCW_ON">CCW ON</button>
+      <button type="submit" name="cmd" value="CCW_OFF">CCW OFF</button>
+      <button type="submit" name="cmd" value="CW_ON">CW ON</button>
+      <button type="submit" name="cmd" value="CW_OFF">CW OFF</button>
+    </div>
+
+    <div class="group">
+      <button type="submit" name="cmd" value="UP_ON">UP ON</button>
+      <button type="submit" name="cmd" value="UP_OFF">UP OFF</button>
+      <button type="submit" name="cmd" value="DOWN_ON">DOWN ON</button>
+      <button type="submit" name="cmd" value="DOWN_OFF">DOWN OFF</button>
+    </div>
   </form>
-
-  <div class="buttons">
-    <button type="button" onclick="sendCmd('CW')">CW ↻</button>
-    <button type="button" onclick="sendCmd('CCW')">CCW ↺</button>
-    <button type="button" onclick="sendCmd('UP')">UP ↑</button>
-    <button type="button" onclick="sendCmd('DOWN')">DOWN ↓</button>
-  </div>
-
-  <button type="button" onclick="getIMU()">Get IMU Status</button>
-
-  <script>
-    const msg       = document.getElementById('msg');
-    const angleForm = document.getElementById('angleForm');
-    const panField  = document.getElementById('panField');
-    const tiltField = document.getElementById('tiltField');
-
-    angleForm.addEventListener('submit', e => {
-      e.preventDefault();
-      const pan  = panField.value;
-      const tilt = tiltField.value;
-      fetch('/', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body:   `pan=${encodeURIComponent(pan)}&tilt=${encodeURIComponent(tilt)}&move=1`
-      })
-      .then(() => {
-        msg.textContent = `Sent angles: (${pan}, ${tilt})°`;
-      })
-      .catch(err => {
-        msg.textContent = `Error: ${err}`;
-      });
-    });
-
-    function sendCmd(c) {
-      fetch('/', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body:   `cmd=${c}`
-      })
-      .then(() => {
-        msg.textContent = `Sent: ${c}`;
-      })
-      .catch(err => {
-        msg.textContent = `Error: ${err}`;
-      });
-    }
-
-    function getIMU() {
-      fetch('/?imu=1')
-        .then(res => res.text())
-        .then(html => {
-          const d = document.createElement('div');
-          d.innerHTML = html;
-          const newMsg = d.querySelector('#msg');
-          msg.textContent = newMsg ? newMsg.textContent : '';
-        })
-        .catch(err => {
-          msg.textContent = `Error: ${err}`;
-        });
-    }
-  </script>
 </body>
 </html>

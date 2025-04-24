@@ -1,12 +1,13 @@
 from flask import Flask, render_template, request
-import subprocess, time
+import subprocess
+import time
 
 FIFO_PATH = '/tmp/arduino_cmd'
 IMU_EXEC  = './read_bno055'
 
 app = Flask(__name__)
 
-# open FIFO once, line-buffered
+# Open the FIFO once, line-buffered
 while True:
     try:
         fifo = open(FIFO_PATH, 'w', buffering=1)
@@ -14,7 +15,7 @@ while True:
     except OSError:
         time.sleep(0.1)
 
-def get_imu():
+def get_imu_status():
     try:
         p = subprocess.Popen([IMU_EXEC],
                              stdout=subprocess.PIPE,
@@ -24,39 +25,48 @@ def get_imu():
             if line.startswith('---'):
                 data = next(p.stdout).split()
                 p.kill()
-                return map(float, data[:3])
+                if len(data) >= 3:
+                    return map(float, data[:3])
+                break
         p.kill()
-    except:
+    except Exception:
         pass
     return None, None, None
 
-@app.route('/', methods=['GET','POST'])
+@app.route('/', methods=['GET', 'POST'])
 def index():
-    msg = ''
-    pan = request.form.get('pan','0')
-    tilt= request.form.get('tilt','0')
+    message = ''
+    pan     = request.form.get('pan', '0')
+    tilt    = request.form.get('tilt', '0')
 
-    if request.method=='POST':
-        # toggle commands
+    if request.method == 'POST':
+        # Direction toggles
         cmd = request.form.get('cmd')
         if cmd in ('CW','CCW','UP','DOWN'):
-            fifo.write(cmd + '\n')
-            msg=f'Sent: {cmd}'
-        # vector move
-        elif 'move' in request.form:
-            fifo.write(f'({pan},{tilt})\n')
-            msg=f'Sent: ({pan}, {tilt})°'
+            try:
+                fifo.write(cmd + '\n')
+                message = f"Sent: {cmd}"
+            except Exception as e:
+                message = f"Error: {e}"
+        # Angle move
+        elif request.form.get('move'):
+            try:
+                fifo.write(f"({pan},{tilt})\n")
+                message = f"Sent angles: ({pan}, {tilt})°"
+            except Exception as e:
+                message = f"Error: {e}"
 
-    elif request.method=='GET' and request.args.get('imu'):
-        y,r,p=get_imu()
-        if y is not None:
-            msg=f"Yaw:{y:.2f}° Roll:{r:.2f}° Pitch:{p:.2f}°"
+    elif request.method == 'GET' and request.args.get('imu'):
+        yaw, roll, pitch = get_imu_status()
+        if yaw is not None:
+            message = f"Yaw: {yaw:.2f}°, Roll: {roll:.2f}°, Pitch: {pitch:.2f}°"
         else:
-            msg="IMU error"
+            message = "Error reading IMU"
 
     return render_template('index.html',
-                           message=msg,
-                           pan=pan, tilt=tilt)
+                           message=message,
+                           pan=pan,
+                           tilt=tilt)
 
-if __name__=='__main__':
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

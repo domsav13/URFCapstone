@@ -1,7 +1,8 @@
-// pan_tilt_direction_only.ino
-// – only UP/DOWN toggles pan motor (pins 22/24)
-// – only CW/CCW toggles tilt motor (pins 23/25)
-// – no angle moves, just continuous stepping in selected direction
+// pan_tilt_direction_toggle.ino
+// – UP/DOWN toggles pan motor (pins 22/24)
+// – CW/CCW toggles tilt motor (pins 23/25)
+// – opposite command reverses direction, same command stops motion
+// – no angle moves, no debug prints for smooth stepping
 
 #include <Arduino.h>
 
@@ -9,7 +10,7 @@
 #define PAN_DIR_PIN    24
 #define TILT_STEP_PIN  23
 #define TILT_DIR_PIN   25
-#define STEP_DELAY_US  90    // adjust up if you still see stutter
+#define STEP_DELAY_US  90    // µs between step pulses
 
 bool panCont   = false;
 int  panDir    = 1;       // +1 = UP, -1 = DOWN
@@ -17,7 +18,7 @@ int  panDir    = 1;       // +1 = UP, -1 = DOWN
 bool tiltCont  = false;
 int  tiltDir   = 1;       // +1 = CW, -1 = CCW
 
-// simple ring buffer for incoming commands
+// command buffer
 constexpr size_t BUF_SZ = 32;
 char buf[BUF_SZ];
 size_t idx = 0;
@@ -29,27 +30,15 @@ inline void stepPin(uint8_t pin) {
   delayMicroseconds(STEP_DELAY_US);
 }
 
-void continuousPanStep() {
-  digitalWrite(PAN_DIR_PIN, panDir > 0 ? HIGH : LOW);
-  stepPin(PAN_STEP_PIN);
-}
-
-void continuousTiltStep() {
-  digitalWrite(TILT_DIR_PIN, tiltDir > 0 ? HIGH : LOW);
-  stepPin(TILT_STEP_PIN);
-}
-
 void handleCmd(const char* cmd) {
-  // PAN control: UP / DOWN
+  // PAN: UP / DOWN
   if (strcmp(cmd, "UP") == 0) {
     if (!panCont) {
       panCont = true;
       panDir  = +1;
-    }
-    else if (panDir < 0) {
+    } else if (panDir < 0) {
       panDir = +1;
-    }
-    else {
+    } else {
       panCont = false;
     }
   }
@@ -57,25 +46,20 @@ void handleCmd(const char* cmd) {
     if (!panCont) {
       panCont = true;
       panDir  = -1;
-    }
-    else if (panDir > 0) {
+    } else if (panDir > 0) {
       panDir = -1;
-    }
-    else {
+    } else {
       panCont = false;
     }
   }
-
-  // TILT control: CW / CCW
+  // TILT: CW / CCW
   else if (strcmp(cmd, "CW") == 0) {
     if (!tiltCont) {
       tiltCont = true;
       tiltDir  = +1;
-    }
-    else if (tiltDir < 0) {
+    } else if (tiltDir < 0) {
       tiltDir = +1;
-    }
-    else {
+    } else {
       tiltCont = false;
     }
   }
@@ -83,15 +67,13 @@ void handleCmd(const char* cmd) {
     if (!tiltCont) {
       tiltCont = true;
       tiltDir  = -1;
-    }
-    else if (tiltDir > 0) {
+    } else if (tiltDir > 0) {
       tiltDir = -1;
-    }
-    else {
+    } else {
       tiltCont = false;
     }
   }
-  // ignore any other commands
+  // ignore any other input
 }
 
 void setup() {
@@ -103,7 +85,7 @@ void setup() {
 }
 
 void loop() {
-  // read serial into buffer until newline
+  // read serial until newline
   while (Serial.available()) {
     char c = Serial.read();
     if (c == '\n') {
@@ -117,6 +99,12 @@ void loop() {
   }
 
   // continuous stepping
-  if (panCont)   continuousPanStep();
-  if (tiltCont)  continuousTiltStep();
+  if (panCont) {
+    digitalWrite(PAN_DIR_PIN, panDir > 0 ? HIGH : LOW);
+    stepPin(PAN_STEP_PIN);
+  }
+  if (tiltCont) {
+    digitalWrite(TILT_DIR_PIN, tiltDir > 0 ? HIGH : LOW);
+    stepPin(TILT_STEP_PIN);
+  }
 }

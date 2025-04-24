@@ -10,145 +10,132 @@
 #include <termios.h>
 #include <errno.h>
 
-#define SERIAL_PORT  "/dev/ttyACM0"  // Adjust if necessary
+#define SERIAL_PORT  "/dev/ttyACM0"
 #define FIFO_PATH    "/tmp/arduino_cmd"
 
-// Open the serial port and return file descriptor
 typedef speed_t Baud;
+
 int openSerialPort(const char* port) {
     int fd = open(port, O_RDWR | O_NOCTTY | O_SYNC);
-    if (fd < 0) {
-        perror("Error opening serial port");
-    }
+    if (fd < 0) perror("Error opening serial port");
     return fd;
 }
 
-// Configure serial port parameters (115200 8N1, no flow control)
 int configureSerialPort(int fd, Baud baudRate) {
     struct termios tty;
     memset(&tty, 0, sizeof tty);
     if (tcgetattr(fd, &tty) != 0) {
-        perror("Error from tcgetattr");
+        perror("tcgetattr");
         return -1;
     }
     cfsetospeed(&tty, baudRate);
     cfsetispeed(&tty, baudRate);
 
-    tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;   // 8-bit chars
-    tty.c_iflag &= ~IGNBRK;                      // disable break processing
-    tty.c_lflag = 0;                             // no signaling chars, no echo, no canonical
-    tty.c_oflag = 0;                             // no remapping, no delays
-    tty.c_cc[VMIN]  = 0;                         // read doesn't block
-    tty.c_cc[VTIME] = 5;                         // 0.5 seconds read timeout
-
-    tty.c_iflag &= ~(IXON | IXOFF | IXANY);      // shut off xon/xoff ctrl
-    tty.c_cflag |= (CLOCAL | CREAD);             // ignore modem controls, enable reading
-    tty.c_cflag &= ~(PARENB | PARODD);           // shut off parity
-    tty.c_cflag &= ~CSTOPB;                      // 1 stop bit
-    tty.c_cflag &= ~CRTSCTS;                     // no hardware flow control
+    tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;
+    tty.c_iflag &= ~IGNBRK;
+    tty.c_lflag = 0;
+    tty.c_oflag = 0;
+    tty.c_cc[VMIN]  = 0;
+    tty.c_cc[VTIME] = 5;
+    tty.c_iflag &= ~(IXON | IXOFF | IXANY);
+    tty.c_cflag |= (CLOCAL | CREAD);
+    tty.c_cflag &= ~(PARENB | PARODD);
+    tty.c_cflag &= ~CSTOPB;
+    tty.c_cflag &= ~CRTSCTS;
 
     if (tcsetattr(fd, TCSANOW, &tty) != 0) {
-        perror("Error from tcsetattr");
+        perror("tcsetattr");
         return -1;
     }
     return 0;
 }
 
-// Wait for "Ready" message from Arduino
 int waitForArduino(int fd) {
     char buf[64];
-    int total_read = 0;
-    while (total_read < 5) {
-        int n = read(fd, buf + total_read, sizeof(buf) - total_read - 1);
+    int total = 0;
+    while (total < 5) {
+        int n = read(fd, buf + total, sizeof(buf) - total - 1);
         if (n > 0) {
-            total_read += n;
-            buf[total_read] = '\0';
+            total += n;
+            buf[total] = '\0';
             if (strstr(buf, "Ready")) {
                 printf("Arduino is ready: %s\n", buf);
                 return 0;
             }
         } else {
-            usleep(100000); // 100 ms
+            usleep(100000);
         }
     }
-    fprintf(stderr, "Timeout waiting for Arduino to be ready.\n");
+    fprintf(stderr, "Timeout waiting for Arduino\n");
     return -1;
 }
 
-// Send a command string to Arduino, appending newline
 int sendCommand(int fd, const char* cmd) {
-    char serialCmd[80];
-    int len = snprintf(serialCmd, sizeof(serialCmd), "%s\n", cmd);
-    if (len < 0 || len >= (int)sizeof(serialCmd)) {
-        fprintf(stderr, "Command too long: '%s'\n", cmd);
+    char out[80];
+    int len = snprintf(out, sizeof out, "%s\n", cmd);
+    if (len < 0 || len >= (int)sizeof out) {
+        fprintf(stderr, "Command too long\n");
         return -1;
     }
-    int w = write(fd, serialCmd, len);
-    if (w < 0) {
-        perror("Error writing to serial port");
+    if (write(fd, out, len) < 0) {
+        perror("write");
         return -1;
     }
     return 0;
 }
 
 int main(void) {
-    // Open and configure the serial port
-    int fd = openSerialPort(SERIAL_PORT);
-    if (fd < 0) return 1;
-    if (configureSerialPort(fd, B115200) < 0) {
-        close(fd);
+    int serial_fd = openSerialPort(SERIAL_PORT);
+    if (serial_fd < 0) return 1;
+    if (configureSerialPort(serial_fd, B115200) < 0) {
+        close(serial_fd);
+        return 1;
+    }
+    if (waitForArduino(serial_fd) < 0) {
+        close(serial_fd);
         return 1;
     }
 
-    // Wait for Arduino startup message
-    if (waitForArduino(fd) < 0) {
-        close(fd);
-        return 1;
-    }
-
-    // Create FIFO if it doesn't exist
+    // ensure /tmp/arduino_cmd exists
     if (access(FIFO_PATH, F_OK) == -1) {
         if (mkfifo(FIFO_PATH, 0666) != 0) {
-            perror("Error creating FIFO");
-            close(fd);
+            perror("mkfifo");
+            close(serial_fd);
             return 1;
         }
     }
 
-    // Open FIFO for reading commands
+    // open read end (blocks until at least one writer appears)
     int fifo_fd = open(FIFO_PATH, O_RDONLY);
     if (fifo_fd < 0) {
-        perror("Error opening FIFO");
-        close(fd);
+        perror("open FIFO for read");
+        close(serial_fd);
         return 1;
     }
+    // open dummy write end so we never see EOF
+    int dummy_fd = open(FIFO_PATH, O_WRONLY | O_NONBLOCK);
 
-    char command[64];
-    printf("Daemon is running. Waiting for commands...\n");
+    printf("Daemon running, waiting for commands on %s\n", FIFO_PATH);
 
-    // Main loop: read from FIFO and forward to Arduino
+    char cmd[64];
     while (1) {
-        int n = read(fifo_fd, command, sizeof(command) - 1);
+        ssize_t n = read(fifo_fd, cmd, sizeof(cmd) - 1);
         if (n > 0) {
-            command[n] = '\0';
-            // Strip trailing newline
-            size_t len = strlen(command);
-            if (len > 0 && command[len - 1] == '\n') {
-                command[len - 1] = '\0';
-            }
-
-            printf("Received command: '%s'\n", command);
-            if (sendCommand(fd, command) == 0) {
-                printf("Sent to Arduino: '%s'\n", command);
-            }
+            cmd[n] = '\0';
+            // strip trailing newline if any
+            if (cmd[n-1] == '\n') cmd[n-1] = '\0';
+            printf("Received: '%s'\n", cmd);
+            if (sendCommand(serial_fd, cmd) == 0)
+                printf("Forwarded to Arduino\n");
         } else if (n < 0) {
-            perror("Error reading from FIFO");
+            perror("read FIFO");
         }
-        usleep(100000);  // 100 ms delay between reads
+        // on n==0 we never hit EOF because dummy_fd stays open
     }
 
+    // never reached
+    close(dummy_fd);
     close(fifo_fd);
-    close(fd);
+    close(serial_fd);
     return 0;
 }
-

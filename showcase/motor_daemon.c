@@ -1,14 +1,16 @@
 // motor_daemon.c
 // Compile with:
 //   gcc -std=c99 -O2 -Wall -o motor_daemon motor_daemon.c
-
+#define _POSIX_C_SOURCE 200809L   // expose usleep() in unistd.h
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
-#include <unistd.h>
+#include <unistd.h>   // for usleep()
+#include <sys/stat.h> // for mkfifo()
 #include <termios.h>
 #include <errno.h>
+
 
 #define SERIAL_PORT  "/dev/ttyACM0"
 #define FIFO_PATH    "/tmp/arduino_cmd"

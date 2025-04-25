@@ -4,18 +4,18 @@ import sys
 import tty
 import termios
 
-SERIAL_PORT = '/dev/ttyACM0'  # Change this if needed
+SERIAL_PORT = '/dev/ttyACM0'  # Update if needed
 BAUD_RATE = 9600
 
+# Accepted keys to send to Arduino
+VALID_KEYS = ['w', 'a', 's', 'd', 'o', 'm', 'n']
+
 def getch():
-    """
-    Reads a single keypress (like getchar, non-blocking, no Enter needed).
-    Only works in terminals (Linux/macOS/RPi).
-    """
+    """Read a single keypress without waiting for Enter (Linux/macOS/RPi only)"""
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
-        tty.setraw(sys.stdin.fileno())
+        tty.setraw(fd)
         ch = sys.stdin.read(1)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
@@ -24,13 +24,13 @@ def getch():
 def main():
     try:
         with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
-            time.sleep(2)
-            print("Ready. Press WASD or 'o'. Press 'q' to quit.")
+            time.sleep(2)  # Allow Arduino time to reset
+            print("Ready. Use keys: w/a/s/d/o/m/n — Press 'q' to quit.")
 
             while True:
                 key = getch()
 
-                if key in ['w', 'a', 's', 'd', 'o']:
+                if key in VALID_KEYS:
                     ser.write(f"{key}\n".encode('utf-8'))
                     print(f"Sent: {key}")
                 elif key == 'q':

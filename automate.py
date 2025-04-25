@@ -1,25 +1,46 @@
 import serial
 import time
+import sys
+import tty
+import termios
 
-# Adjust to your actual serial port (COMx on Windows, /dev/ttyUSBx or /dev/ttyACMx on Linux)
-SERIAL_PORT = '/dev/ttyACM0'  
+SERIAL_PORT = '/dev/ttyACM0'  # Change this if needed
 BAUD_RATE = 9600
 
-# Commands you want to send (can be any pattern of WASD + Enter)
-COMMANDS = ['w', 'a', 's', 'd', 'o']  # Add/remove as needed
-
-# Delay between key presses
-DELAY_BETWEEN_COMMANDS = 1.0  # seconds
+def getch():
+    """
+    Reads a single keypress (like getchar, non-blocking, no Enter needed).
+    Only works in terminals (Linux/macOS/RPi).
+    """
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
 
 def main():
-    with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
-        time.sleep(2)  # Wait for Arduino to reset
+    try:
+        with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
+            time.sleep(2)
+            print("Ready. Press WASD or 'o'. Press 'q' to quit.")
 
-        while True:
-            for cmd in COMMANDS:
-                ser.write(f"{cmd}\n".encode('utf-8'))  # send char + newline (like Enter key)
-                print(f"Sent: {cmd}")
-                time.sleep(DELAY_BETWEEN_COMMANDS)
+            while True:
+                key = getch()
+
+                if key in ['w', 'a', 's', 'd', 'o']:
+                    ser.write(f"{key}\n".encode('utf-8'))
+                    print(f"Sent: {key}")
+                elif key == 'q':
+                    print("Exiting.")
+                    break
+                else:
+                    print(f"Ignored: {key}")
+
+    except serial.SerialException as e:
+        print(f"Serial error: {e}")
 
 if __name__ == '__main__':
     main()
